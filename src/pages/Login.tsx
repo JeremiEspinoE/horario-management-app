@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -10,7 +9,7 @@ import { toast } from "sonner";
 import { LogIn } from 'lucide-react';
 
 const Login = () => {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { login, role } = useAuth();
@@ -28,7 +27,7 @@ const Login = () => {
     setIsSubmitting(true);
     
     try {
-      const success = await login(email, password);
+      const success = await login(username, password);
       
       if (success) {
         toast.success('Inicio de sesión exitoso');
@@ -64,15 +63,15 @@ const Login = () => {
           <CardContent className="p-6">
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <label htmlFor="email" className="text-sm font-medium">
-                  Correo Electrónico
+                <label htmlFor="username" className="text-sm font-medium">
+                  Usuario
                 </label>
                 <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="usuario@ejemplo.com"
+                  id="username"
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="usuario123"
                   required
                   className="w-full"
                 />

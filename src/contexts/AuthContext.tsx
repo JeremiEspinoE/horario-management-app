@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
 import { toast } from "sonner";
 import axios from 'axios';
@@ -11,7 +10,7 @@ interface AuthContextType {
   accessToken: string | null;
   refreshToken: string | null;
   setRole: (role: Role) => void;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
   isLoading: boolean;
 }
@@ -38,7 +37,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    // Load authentication state from localStorage on component mount
+    // Carga estado de autenticación desde localStorage
     const storedRole = localStorage.getItem('role') as Role;
     const storedAccessToken = localStorage.getItem('accessToken');
     const storedRefreshToken = localStorage.getItem('refreshToken');
@@ -53,11 +52,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsLoading(false);
   }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (username: string, password: string): Promise<boolean> => {
     try {
       setIsLoading(true);
-      const response = await axios.post('http://localhost:8000/api/auth/login/', {
-        email,
+      const response = await axios.post('http://localhost:8000/api/auth/token/', {
+        username,
         password
       }, {
         headers: {
