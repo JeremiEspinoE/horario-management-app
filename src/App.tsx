@@ -23,6 +23,11 @@ import Materias from "./pages/Materias";
 import Docentes from "./pages/Docentes";
 import Aulas from "./pages/Aulas";
 import Grupos from "./pages/Grupos";
+import DisponibilidadDocente from "./pages/DisponibilidadDocente";
+import HorarioManual from "./pages/HorarioManual";
+import HorarioAuto from "./pages/HorarioAuto";
+import ReportesHorarios from "./pages/ReportesHorarios";
+import Restricciones from "./pages/Restricciones";
 
 const queryClient = new QueryClient();
 
@@ -52,6 +57,11 @@ const App = () => (
                 <Route path="/admin/docentes" element={<Docentes />} />
                 <Route path="/admin/aulas" element={<Aulas />} />
                 <Route path="/admin/grupos" element={<Grupos />} />
+                <Route path="/admin/disponibilidad" element={<DisponibilidadDocente />} />
+                <Route path="/admin/horarios/manual" element={<HorarioManual />} />
+                <Route path="/admin/horarios/automatico" element={<HorarioAuto />} />
+                <Route path="/admin/reportes" element={<ReportesHorarios />} />
+                <Route path="/admin/restricciones" element={<Restricciones />} />
               </Route>
 
               {/* Protected Teacher routes */}
@@ -60,6 +70,9 @@ const App = () => (
               >
                 <Route path="/dashboard-docente" element={<DashboardDocente />} />
                 <Route path="/docente/dashboard" element={<DashboardDocente />} />
+                <Route path="/docente/disponibilidad" element={<DisponibilidadDocente />} />
+                <Route path="/docente/horario" element={<ReportesHorarios />} />
+                <Route path="/docente/exportar" element={<ReportesHorarios />} />
               </Route>
 
               {/* Catch-all route */}
