@@ -11,30 +11,33 @@ import {
   FileText, 
   ClipboardList, 
   ClipboardCheck,
-  LogIn
+  LogIn,
+  Building,
+  Settings,
+  Grid
 } from 'lucide-react';
 
 const Sidebar = () => {
   const { role, logout } = useAuth();
   
   const adminLinks = [
-    { name: 'Dashboard', path: '/dashboard-admin', icon: <LayoutDashboard className="w-5 h-5" /> },
-    { name: 'Unidades', path: '/unidades', icon: <BookOpen className="w-5 h-5" /> },
-    { name: 'Carreras', path: '/carreras', icon: <FileText className="w-5 h-5" /> },
-    { name: 'Materias', path: '/materias', icon: <BookOpen className="w-5 h-5" /> },
-    { name: 'Grupos/Secciones', path: '/grupos', icon: <Users className="w-5 h-5" /> },
-    { name: 'Aulas', path: '/aulas', icon: <FileText className="w-5 h-5" /> },
-    { name: 'Docentes', path: '/docentes', icon: <Users className="w-5 h-5" /> },
-    { name: 'Disponibilidad', path: '/disponibilidad', icon: <Calendar className="w-5 h-5" /> },
-    { name: 'Horarios Manual', path: '/horarios-manual', icon: <ClipboardList className="w-5 h-5" /> },
-    { name: 'Horarios Automático', path: '/horarios-automatico', icon: <ClipboardCheck className="w-5 h-5" /> },
-    { name: 'Restricciones', path: '/restricciones', icon: <FileText className="w-5 h-5" /> }
+    { name: 'Dashboard', path: '/admin/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
+    { name: 'Unidades Académicas', path: '/admin/unidades', icon: <Building className="w-5 h-5" /> },
+    { name: 'Docentes', path: '/admin/docentes', icon: <Users className="w-5 h-5" /> },
+    { name: 'Aulas', path: '/admin/aulas', icon: <Grid className="w-5 h-5" /> },
+    { name: 'Grupos/Secciones', path: '/admin/grupos', icon: <Users className="w-5 h-5" /> },
+    { name: 'Disponibilidad', path: '/admin/disponibilidad', icon: <Calendar className="w-5 h-5" /> },
+    { name: 'Horarios Manual', path: '/admin/horarios/manual', icon: <ClipboardList className="w-5 h-5" /> },
+    { name: 'Horarios Automático', path: '/admin/horarios/automatico', icon: <ClipboardCheck className="w-5 h-5" /> },
+    { name: 'Restricciones', path: '/admin/restricciones', icon: <Settings className="w-5 h-5" /> },
+    { name: 'Reportes', path: '/admin/reportes', icon: <FileText className="w-5 h-5" /> }
   ];
   
   const docenteLinks = [
-    { name: 'Mi Disponibilidad', path: '/mi-disponibilidad', icon: <Calendar className="w-5 h-5" /> },
-    { name: 'Mi Horario', path: '/mi-horario', icon: <ClipboardList className="w-5 h-5" /> },
-    { name: 'Exportar Horario', path: '/exportar-horario', icon: <FileText className="w-5 h-5" /> }
+    { name: 'Dashboard', path: '/docente/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
+    { name: 'Mi Disponibilidad', path: '/docente/disponibilidad', icon: <Calendar className="w-5 h-5" /> },
+    { name: 'Mi Horario', path: '/docente/horario', icon: <ClipboardList className="w-5 h-5" /> },
+    { name: 'Exportar Horario', path: '/docente/exportar', icon: <FileText className="w-5 h-5" /> }
   ];
   
   const links = role === 'Administrador' ? adminLinks : docenteLinks;

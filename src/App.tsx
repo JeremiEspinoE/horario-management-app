@@ -16,6 +16,14 @@ import Unauthorized from "./pages/Unauthorized";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 
+// CRUD Pages
+import UnidadesAcademicas from "./pages/UnidadesAcademicas";
+import Carreras from "./pages/Carreras";
+import Materias from "./pages/Materias";
+import Docentes from "./pages/Docentes";
+import Aulas from "./pages/Aulas";
+import Grupos from "./pages/Grupos";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -37,7 +45,13 @@ const App = () => (
                 element={<ProtectedRoute allowedRoles={["Administrador"]} />}
               >
                 <Route path="/dashboard-admin" element={<DashboardAdmin />} />
-                {/* Add other admin routes here */}
+                <Route path="/admin/dashboard" element={<DashboardAdmin />} />
+                <Route path="/admin/unidades" element={<UnidadesAcademicas />} />
+                <Route path="/admin/unidades/:id/carreras" element={<Carreras />} />
+                <Route path="/admin/carreras/:id/materias" element={<Materias />} />
+                <Route path="/admin/docentes" element={<Docentes />} />
+                <Route path="/admin/aulas" element={<Aulas />} />
+                <Route path="/admin/grupos" element={<Grupos />} />
               </Route>
 
               {/* Protected Teacher routes */}
@@ -45,7 +59,7 @@ const App = () => (
                 element={<ProtectedRoute allowedRoles={["Docente"]} />}
               >
                 <Route path="/dashboard-docente" element={<DashboardDocente />} />
-                {/* Add other teacher routes here */}
+                <Route path="/docente/dashboard" element={<DashboardDocente />} />
               </Route>
 
               {/* Catch-all route */}
