@@ -21,6 +21,7 @@ interface Materia {
   id: number;
   nombre_materia: string;
   codigo_materia: string;
+  carrera: number; // Added missing property
 }
 
 interface Periodo {

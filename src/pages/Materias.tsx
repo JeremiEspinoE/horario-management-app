@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
@@ -21,6 +20,7 @@ interface Carrera {
   id: number;
   nombre_carrera: string;
   codigo_carrera: string;
+  unidad: number; // Added missing property
 }
 
 interface TipoEspacio {
