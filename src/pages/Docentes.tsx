@@ -110,7 +110,7 @@ const Docentes = () => {
       }
       
       // Load usuarios (para vincular)
-      const usuariosData = await fetchData<Usuario>("users/usuarios/");
+      const usuariosData = await fetchData<Usuario>("users/all/");
       if (usuariosData) {
         setUsuarios(usuariosData);
       }

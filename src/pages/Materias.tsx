@@ -115,7 +115,7 @@ const Materias = () => {
       
       // Load tipos de espacios
       const tiposEspaciosData = await fetchData<TipoEspacio>(
-        "academic/tipos-espacios/"
+        "academic/tipos-espacio/"
       );
       
       if (tiposEspaciosData) {
