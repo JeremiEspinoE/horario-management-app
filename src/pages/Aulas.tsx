@@ -82,7 +82,7 @@ const Aulas = () => {
       }
       
       // Load tipos de espacios
-      const tiposEspaciosData = await fetchData<TipoEspacio>("academic/tipos-espacios/");
+      const tiposEspaciosData = await fetchData<TipoEspacio>("academic/tipos-espacio/");
       if (tiposEspaciosData) {
         setTiposEspacios(tiposEspaciosData);
       }
