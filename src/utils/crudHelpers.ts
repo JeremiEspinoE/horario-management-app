@@ -1,3 +1,4 @@
+
 import { toast } from "sonner";
 import client from "@/utils/axiosClient";
 import { AxiosError } from "axios";
@@ -33,7 +34,8 @@ export async function fetchData<T>(endpoint: string): Promise<T[] | null> {
       toast.error(`Error inesperado: ${axiosError.message}`);
     }
     
-    return null;
+    // Return empty array instead of null to prevent component crashes
+    return [];
   }
 }
 

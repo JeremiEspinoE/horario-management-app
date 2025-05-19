@@ -1,14 +1,22 @@
+
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
 import { toast } from "sonner";
 import axios from 'axios';
 
 type Role = 'Docente' | 'Administrador' | null;
 
+interface User {
+  docente_id?: number;
+  admin_id?: number;
+  username?: string;
+}
+
 interface AuthContextType {
   isAuthenticated: boolean;
   role: Role;
   accessToken: string | null;
   refreshToken: string | null;
+  user: User | null;
   setRole: (role: Role) => void;
   login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
@@ -35,18 +43,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     // Carga estado de autenticación desde localStorage
     const storedRole = localStorage.getItem('role') as Role;
     const storedAccessToken = localStorage.getItem('accessToken');
     const storedRefreshToken = localStorage.getItem('refreshToken');
+    
+    // Try to load user data from localStorage if exists
+    let storedUser = null;
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        storedUser = JSON.parse(userStr);
+      }
+    } catch (e) {
+      console.error("Error parsing user data from localStorage", e);
+    }
 
     if (storedAccessToken && storedRole) {
       setIsAuthenticated(true);
       setRole(storedRole);
       setAccessToken(storedAccessToken);
       setRefreshToken(storedRefreshToken);
+      setUser(storedUser);
     }
     
     setIsLoading(false);
@@ -64,10 +85,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
       });
 
-      const { access, refresh } = response.data;
+      const { access, refresh, user_data } = response.data;
       
       localStorage.setItem('accessToken', access);
       localStorage.setItem('refreshToken', refresh);
+      
+      // If we get user data from the API, store it
+      if (user_data) {
+        localStorage.setItem('user', JSON.stringify(user_data));
+        setUser(user_data);
+      }
       
       setAccessToken(access);
       setRefreshToken(refresh);
@@ -87,11 +114,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     localStorage.removeItem('role');
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
     
     setIsAuthenticated(false);
     setRole(null);
     setAccessToken(null);
     setRefreshToken(null);
+    setUser(null);
   };
 
   return (
@@ -100,6 +129,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       role,
       accessToken,
       refreshToken,
+      user,
       setRole: (newRole) => {
         setRole(newRole);
         if (newRole) {

@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { 
@@ -18,9 +18,11 @@ import {
   Download,
   Clock
 } from 'lucide-react';
+import DarkModeToggle from './DarkModeToggle';
 
 const Sidebar = () => {
   const { role, logout } = useAuth();
+  const navigate = useNavigate();
   
   const adminLinks = [
     { name: 'Dashboard', path: '/admin/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
@@ -45,10 +47,13 @@ const Sidebar = () => {
   const links = role === 'Administrador' ? adminLinks : docenteLinks;
   
   return (
-    <aside className="h-screen w-64 bg-academic-light border-r border-gray-200 fixed left-0 top-0 overflow-y-auto">
+    <aside className="h-screen w-64 bg-sidebar-background text-sidebar-foreground border-r border-sidebar-border fixed left-0 top-0 overflow-y-auto">
       <div className="p-4">
         <div className="academic-gradient text-white p-4 rounded-lg mb-6">
-          <h2 className="text-xl font-bold">Sistema de Horarios</h2>
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-bold">Sistema de Horarios</h2>
+            <DarkModeToggle />
+          </div>
           <p className="text-sm opacity-80">
             {role === 'Administrador' ? 'Panel Administrativo' : 'Panel Docente'}
           </p>
@@ -61,10 +66,10 @@ const Sidebar = () => {
               to={link.path}
               className={({ isActive }) => 
                 cn(
-                  "flex items-center px-4 py-3 text-gray-700 rounded-lg transition-all",
+                  "flex items-center px-4 py-3 rounded-lg transition-all",
                   isActive
-                    ? "bg-academic-primary text-white shadow-md"
-                    : "hover:bg-gray-100"
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent"
                 )
               }
             >
@@ -74,8 +79,11 @@ const Sidebar = () => {
           ))}
           
           <button
-            onClick={logout}
-            className="flex w-full items-center px-4 py-3 text-gray-700 rounded-lg hover:bg-gray-100 transition-all mt-10"
+            onClick={() => {
+              logout();
+              navigate('/login');
+            }}
+            className="flex w-full items-center px-4 py-3 text-sidebar-foreground rounded-lg hover:bg-sidebar-accent transition-all mt-10"
           >
             <LogIn className="w-5 h-5 mr-3" />
             <span>Cerrar Sesión</span>

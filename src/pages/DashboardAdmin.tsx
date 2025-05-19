@@ -78,7 +78,7 @@ const DashboardAdmin = () => {
     <div className="animate-fade-in">
       <div className="mb-6">
         <h1 className="text-3xl font-bold">Panel de Administración</h1>
-        <p className="text-gray-600">
+        <p className="text-gray-600 dark:text-gray-400">
           Resumen de entidades académicas y horarios
         </p>
       </div>
@@ -93,49 +93,49 @@ const DashboardAdmin = () => {
             title="Unidades Académicas" 
             count={counts.unidades} 
             icon={<BookOpen className="h-6 w-6" />} 
-            link="/unidades" 
+            link="/admin/unidades" 
           />
           <CardSummary 
             title="Carreras" 
             count={counts.carreras} 
             icon={<FileText className="h-6 w-6" />} 
-            link="/carreras" 
+            link="/admin/carreras" 
           />
           <CardSummary 
             title="Materias" 
             count={counts.materias} 
             icon={<BookOpen className="h-6 w-6" />} 
-            link="/materias" 
+            link="/admin/materias" 
           />
           <CardSummary 
             title="Grupos/Secciones" 
             count={counts.grupos} 
             icon={<Users className="h-6 w-6" />} 
-            link="/grupos" 
+            link="/admin/grupos" 
           />
           <CardSummary 
             title="Aulas" 
             count={counts.aulas} 
             icon={<FileText className="h-6 w-6" />} 
-            link="/aulas" 
+            link="/admin/aulas" 
           />
           <CardSummary 
             title="Docentes" 
             count={counts.docentes} 
             icon={<User className="h-6 w-6" />} 
-            link="/docentes" 
+            link="/admin/docentes" 
           />
           <CardSummary 
             title="Bloques Horarios" 
             count={counts.bloques} 
             icon={<Calendar className="h-6 w-6" />} 
-            link="/bloques" 
+            link="/admin/bloques" 
           />
           <CardSummary 
             title="Horarios Asignados" 
             count={counts.horarios} 
             icon={<ClipboardList className="h-6 w-6" />} 
-            link="/horarios-manual" 
+            link="/admin/horarios/manual" 
           />
         </div>
       )}

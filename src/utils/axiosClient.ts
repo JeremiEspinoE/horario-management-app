@@ -33,8 +33,11 @@ client.interceptors.response.use(
     switch (error.response.status) {
       case 401:
         toast.error('Sesión expirada o no autorizada. Por favor inicie sesión nuevamente.');
-        // Optionally redirect to login
-        // window.location.href = '/login';
+        // Redirect to login if token is invalid/expired
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
+          localStorage.removeItem('accessToken');
+          window.location.href = '/login';
+        }
         break;
       case 403:
         toast.error('No tiene permisos para realizar esta acción.');

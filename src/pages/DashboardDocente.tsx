@@ -16,7 +16,7 @@ const DashboardDocente = () => {
     <div className="animate-fade-in">
       <div className="mb-6">
         <h1 className="text-3xl font-bold">Panel de Docente</h1>
-        <p className="text-gray-600">
+        <p className="text-gray-600 dark:text-gray-400">
           Acceda a su disponibilidad y horarios
         </p>
       </div>
@@ -33,11 +33,11 @@ const DashboardDocente = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-4">
-            <p className="text-sm text-gray-600 mb-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
               Registre sus horarios disponibles para facilitar la asignación de clases.
             </p>
             <Button 
-              onClick={() => navigate('/mi-disponibilidad')}
+              onClick={() => navigate('/docente/disponibilidad')}
               className="w-full bg-academic-primary hover:bg-academic-secondary"
             >
               Gestionar Disponibilidad
@@ -56,11 +56,11 @@ const DashboardDocente = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-4">
-            <p className="text-sm text-gray-600 mb-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
               Visualice sus horarios asignados para el periodo académico actual.
             </p>
             <Button 
-              onClick={() => navigate('/mi-horario')}
+              onClick={() => navigate('/docente/horario')}
               className="w-full bg-academic-secondary hover:bg-academic-primary"
             >
               Ver Horario
@@ -79,11 +79,11 @@ const DashboardDocente = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-4">
-            <p className="text-sm text-gray-600 mb-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
               Exporte su horario en formato Excel para imprimir o compartir.
             </p>
             <Button 
-              onClick={() => navigate('/exportar-horario')}
+              onClick={() => navigate('/docente/exportar')}
               className="w-full bg-academic-accent hover:bg-academic-secondary"
             >
               Exportar a Excel
