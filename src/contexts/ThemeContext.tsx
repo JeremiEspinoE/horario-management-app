@@ -23,6 +23,8 @@ interface ThemeProviderProps {
 
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const [theme, setTheme] = useState<Theme>(() => {
+    if (typeof window === 'undefined') return 'light';
+    
     // Check if theme is already stored in localStorage
     const storedTheme = localStorage.getItem("theme") as Theme;
     if (storedTheme === "dark" || storedTheme === "light") {
@@ -48,7 +50,10 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
 
   useEffect(() => {
     // Apply theme to document when it changes
-    document.documentElement.classList.toggle("dark", theme === "dark");
+    if (typeof window !== 'undefined') {
+      document.documentElement.classList.remove("light", "dark");
+      document.documentElement.classList.add(theme);
+    }
   }, [theme]);
 
   return (

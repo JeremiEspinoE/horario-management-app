@@ -9,16 +9,17 @@ const DarkModeToggle = () => {
   
   return (
     <Button 
-      variant="ghost" 
+      variant="outline" 
       size="icon" 
       onClick={toggleTheme}
-      className="rounded-full" 
+      className="rounded-full transition-colors"
+      aria-label={theme === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
       title={theme === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
     >
       {theme === "dark" ? (
-        <Sun className="h-5 w-5" />
+        <Sun className="h-[1.2rem] w-[1.2rem] text-yellow-500 transition-all" />
       ) : (
-        <Moon className="h-5 w-5" />
+        <Moon className="h-[1.2rem] w-[1.2rem] text-slate-700 transition-all" />
       )}
       <span className="sr-only">Cambiar tema</span>
     </Button>
