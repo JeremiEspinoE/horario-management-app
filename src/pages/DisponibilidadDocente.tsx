@@ -7,9 +7,8 @@ import { fetchData } from "@/utils/crudHelpers";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
-import { Loader2, Upload, RefreshCw, Save } from "lucide-react";
+import { Loader2, Upload, RefreshCw } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 
 interface Docente {
@@ -53,7 +52,7 @@ const diasSemana = [
 ];
 
 const DisponibilidadDocente = () => {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const isAdmin = role === "Administrador";
   
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -67,33 +66,59 @@ const DisponibilidadDocente = () => {
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [file, setFile] = useState<File | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadInitialData = async () => {
       setIsLoading(true);
+      setError(null);
+      
       try {
+        console.log("Loading initial data for DisponibilidadDocente");
+        
         // Cargar periodos académicos activos
         const periodosData = await fetchData<Periodo>("academic/periodos-academicos/?activo=true");
+        console.log("Periodos loaded:", periodosData);
+        
         if (periodosData && periodosData.length > 0) {
           setPeriodos(periodosData);
           setSelectedPeriodo(periodosData[0].id);
+        } else {
+          console.log("No periodos found or empty array returned");
+          setPeriodos([]);
         }
         
         // Cargar bloques horarios
         const bloquesData = await fetchData<BloqueHorario>("scheduling/bloques-horarios/");
-        if (bloquesData) {
+        console.log("Bloques loaded:", bloquesData);
+        
+        if (bloquesData && bloquesData.length > 0) {
           setBloques(bloquesData.sort((a, b) => a.orden - b.orden));
+        } else {
+          console.log("No bloques found or empty array returned");
+          setBloques([]);
         }
         
         // Si es administrador, cargar docentes
         if (isAdmin) {
           const docentesData = await fetchData<Docente>("users/docentes/");
+          console.log("Docentes loaded:", docentesData);
+          
           if (docentesData && docentesData.length > 0) {
             setDocentes(docentesData);
+            setSelectedDocente(docentesData[0].id);
+          } else {
+            console.log("No docentes found or empty array returned");
+            setDocentes([]);
           }
+        } else if (user && user.docente_id) {
+          // Si es docente, usar su propio ID
+          console.log("Setting docente ID for non-admin user:", user.docente_id);
+          setSelectedDocente(user.docente_id);
         }
       } catch (error) {
         console.error("Error cargando datos iniciales:", error);
+        setError("Error al cargar los datos iniciales. Por favor, intente nuevamente más tarde.");
         toast.error("Error al cargar los datos iniciales");
       } finally {
         setIsLoading(false);
@@ -101,7 +126,7 @@ const DisponibilidadDocente = () => {
     };
     
     loadInitialData();
-  }, [isAdmin]);
+  }, [isAdmin, user]);
 
   // Cargar disponibilidad cuando se selecciona docente y periodo
   useEffect(() => {
@@ -111,12 +136,22 @@ const DisponibilidadDocente = () => {
   }, [selectedDocente, selectedPeriodo]);
 
   const loadDisponibilidad = async () => {
+    if (!selectedDocente || !selectedPeriodo) {
+      console.log("Cannot load disponibilidad: missing docente or periodo");
+      return;
+    }
+    
     setIsLoading(true);
+    setError(null);
+    
     try {
+      console.log(`Loading disponibilidad for docente ${selectedDocente} and periodo ${selectedPeriodo}`);
       const response = await client.get(`/scheduling/disponibilidad-docentes/?docente=${selectedDocente}&periodo=${selectedPeriodo}`);
+      console.log("Disponibilidad loaded:", response.data);
       setDisponibilidad(response.data);
     } catch (error) {
       console.error("Error cargando disponibilidad:", error);
+      setError("Error al cargar la disponibilidad. Por favor, intente nuevamente.");
       toast.error("Error al cargar la disponibilidad");
     } finally {
       setIsLoading(false);
@@ -124,6 +159,11 @@ const DisponibilidadDocente = () => {
   };
 
   const handleToggleDisponibilidad = async (dia: number, bloque: number) => {
+    if (!selectedDocente || !selectedPeriodo) {
+      toast.error("Seleccione un docente y un periodo");
+      return;
+    }
+    
     // Buscar si ya existe este bloque
     const existeBloque = disponibilidad.find(
       d => d.dia_semana === dia && d.bloque_horario === bloque
@@ -134,6 +174,7 @@ const DisponibilidadDocente = () => {
     try {
       if (existeBloque) {
         // Actualizar disponibilidad existente
+        console.log(`Updating disponibilidad ${existeBloque.id} to ${!existeBloque.esta_disponible}`);
         await client.patch(`/scheduling/disponibilidad-docentes/${existeBloque.id}/`, {
           esta_disponible: !existeBloque.esta_disponible
         });
@@ -154,7 +195,9 @@ const DisponibilidadDocente = () => {
           esta_disponible: true
         };
         
+        console.log("Creating new disponibilidad:", newDisponibilidad);
         const response = await client.post('/scheduling/disponibilidad-docentes/', newDisponibilidad);
+        console.log("New disponibilidad created:", response.data);
         setDisponibilidad([...disponibilidad, response.data]);
       }
       
@@ -169,6 +212,7 @@ const DisponibilidadDocente = () => {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
+      console.log("File selected:", e.target.files[0].name);
       setFile(e.target.files[0]);
     }
   };
@@ -189,6 +233,12 @@ const DisponibilidadDocente = () => {
       if (selectedDocente) {
         formData.append('docente_id', selectedDocente.toString());
       }
+      
+      console.log("Uploading file with formData:", {
+        file: file.name,
+        periodo_id: selectedPeriodo,
+        docente_id: selectedDocente
+      });
       
       await client.post('/scheduling/disponibilidad-docentes/cargar-disponibilidad-excel/', formData, {
         headers: {
@@ -213,6 +263,28 @@ const DisponibilidadDocente = () => {
     );
     return bloqueDisponibilidad ? bloqueDisponibilidad.esta_disponible : false;
   };
+
+  if (error) {
+    return (
+      <div className="container mx-auto py-6">
+        <PageHeader 
+          title="Disponibilidad de Docentes" 
+          description="Configuración de horarios disponibles para cada docente"
+        />
+        <Card className="mb-6">
+          <CardContent className="p-6">
+            <div className="text-red-500 font-medium">{error}</div>
+            <Button 
+              onClick={() => window.location.reload()}
+              className="mt-4"
+            >
+              Intentar nuevamente
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-6">
@@ -304,7 +376,7 @@ const DisponibilidadDocente = () => {
         </CardContent>
       </Card>
 
-      {selectedDocente && selectedPeriodo && (
+      {selectedDocente && selectedPeriodo && bloques.length > 0 && (
         <Card className="overflow-hidden">
           <CardContent className="p-0">
             <div className="overflow-x-auto">
@@ -336,6 +408,7 @@ const DisponibilidadDocente = () => {
                             }`}
                             onClick={() => handleToggleDisponibilidad(dia.id, bloque.id)}
                             disabled={isSaving}
+                            type="button"
                           >
                             {isDisponible(dia.id, bloque.id) && (
                               <span className="text-white">✓</span>
@@ -356,6 +429,16 @@ const DisponibilidadDocente = () => {
         <div className="flex justify-center my-12">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-academic-primary"></div>
         </div>
+      )}
+
+      {bloques.length === 0 && !isLoading && (
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center text-gray-500">
+              No hay bloques horarios disponibles. Por favor, contacte al administrador.
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
