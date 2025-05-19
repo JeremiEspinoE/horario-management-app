@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
@@ -16,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 // Define the shape of a unidad académica
 interface UnidadAcademica {
-  id: number;
+  unidad_id: number;
   nombre_unidad: string;
   descripcion: string;
 }
@@ -79,38 +78,41 @@ const UnidadesAcademicas = () => {
     setCurrentUnidad(null);
   };
 
-  const handleSave = async () => {
-    const isValid = await form.trigger();
-    if (!isValid) return;
+ const handleSave = async () => {
+  const isValid = await form.trigger();
+  if (!isValid) return;
 
-    const values = form.getValues();
-    
-    if (currentUnidad) {
-      // Update existing unidad
-      const updated = await updateItem<UnidadAcademica>(
-        "academic/unidades-academicas/", 
-        currentUnidad.id, 
-        values
-      );
-      
-      if (updated) {
-        setUnidades(unidades.map(u => u.id === currentUnidad.id ? updated : u));
-        handleCloseModal();
-      }
-    } else {
-      // Create new unidad
-      const created = await createItem<UnidadAcademica>(
-        "academic/unidades-academicas/", 
-        values
-      );
-      
-      if (created) {
-        setUnidades([...unidades, created]);
-        handleCloseModal();
-      }
+  const values = form.getValues();
+
+  if (currentUnidad) {
+    if (!currentUnidad.unidad_id) {
+      toast.error("ID de la unidad académica no está definido.");
+      return;
     }
-  };
+    // Update existing unidad
+    const updated = await updateItem<UnidadAcademica>(
+      "academic/unidades-academicas/",
+      currentUnidad.unidad_id,
+      values
+    );
 
+    if (updated) {
+      setUnidades(unidades.map(u => u.unidad_id === currentUnidad.unidad_id ? updated : u));
+      handleCloseModal();
+    }
+  } else {
+    // Create new unidad
+    const created = await createItem<UnidadAcademica>(
+      "academic/unidades-academicas/",
+      values
+    );
+
+    if (created) {
+      setUnidades([...unidades, created]);
+      handleCloseModal();
+    }
+  }
+};
   const handleDelete = (unidad: UnidadAcademica) => {
     setCurrentUnidad(unidad);
     setIsDeleteDialogOpen(true);
@@ -119,17 +121,17 @@ const UnidadesAcademicas = () => {
   const confirmDelete = async () => {
     if (!currentUnidad) return;
     
-    const success = await deleteItem("academic/unidades-academicas/", currentUnidad.id);
+    const success = await deleteItem("academic/unidades-academicas/", currentUnidad.unidad_id);
     
     if (success) {
-      setUnidades(unidades.filter(u => u.id !== currentUnidad.id));
+      setUnidades(unidades.filter(u => u.unidad_id !== currentUnidad.unidad_id));
       setIsDeleteDialogOpen(false);
       setCurrentUnidad(null);
     }
   };
 
   const handleViewCarreras = (unidad: UnidadAcademica) => {
-    navigate(`/admin/unidades/${unidad.id}/carreras`);
+    navigate(`/admin/unidades/${unidad.unidad_id}/carreras`);
   };
 
   const columns = [
