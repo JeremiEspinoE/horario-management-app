@@ -11,19 +11,19 @@ import { Check, AlertTriangle, Calendar, Clock, BookOpen, Building, Users, MapPi
 import PageHeader from "@/components/PageHeader";
 
 interface UnidadAcademica {
-  id: number;
+  unidad_id: number;
   nombre_unidad: string;
 }
 
 interface Carrera {
-  id: number;
+  carrera_id: number;
   nombre_carrera: string;
   codigo_carrera: string;
   unidad: number;
 }
 
 interface Grupo {
-  id: number;
+  grupo_id: number;
   codigo_grupo: string;
   materia: number;
   carrera: number;
@@ -34,7 +34,7 @@ interface Grupo {
 }
 
 interface Materia {
-  id: number;
+  materia_id: number;
   nombre_materia: string;
   codigo_materia: string;
   horas_academicas_teoricas: number;
@@ -43,14 +43,14 @@ interface Materia {
 }
 
 interface Docente {
-  id: number;
+  docente_id: number;
   nombres: string;
   apellidos: string;
   codigo_docente: string;
 }
 
 interface Aula {
-  id: number;
+  espacio_id: number;
   nombre_espacio: string;
   tipo_espacio: number;
   capacidad: number;
@@ -59,22 +59,22 @@ interface Aula {
 }
 
 interface BloqueHorario {
-  id: number;
+  bloque_def_id: number;
   hora_inicio: string;
   hora_fin: string;
   orden: number;
 }
 
 interface Periodo {
-  id: number;
-  nombre: string;
+  periodo_id: number;
+  nombre_periodo: string;
   fecha_inicio: string;
   fecha_fin: string;
   activo: boolean;
 }
 
 interface HorarioAsignado {
-  id: number;
+  horario_id: number;
   grupo: number;
   docente: number;
   espacio: number;
@@ -84,7 +84,7 @@ interface HorarioAsignado {
 }
 
 interface DisponibilidadDocente {
-  id: number;
+  disponibilidad_id: number;
   docente: number;
   periodo: number;
   dia_semana: number;
@@ -138,7 +138,7 @@ const HorarioManual = () => {
         const periodosData = await fetchData<Periodo>("academic/periodos-academicos/?activo=true");
         if (periodosData && periodosData.length > 0) {
           setPeriodos(periodosData);
-          setSelectedPeriodo(periodosData[0].id);
+          setSelectedPeriodo(periodosData[0].periodo_id);
         }
         
         // Load academic units
@@ -280,14 +280,14 @@ const HorarioManual = () => {
   }, [selectedDocente, selectedPeriodo]);
   
   const getMateriaPorGrupo = (grupoId: number): Materia | undefined => {
-    const grupo = grupos.find(g => g.id === grupoId);
+    const grupo = grupos.find(g => g.grupo_id === grupoId);
     if (!grupo) return undefined;
     
-    return materias.find(m => m.id === grupo.materia);
+    return materias.find(m => m.materia_id === grupo.materia);
   };
   
   const getMateriaHorasTotales = (materiaId: number): number => {
-    const materia = materias.find(m => m.id === materiaId);
+    const materia = materias.find(m => m.materia_id === materiaId);
     if (!materia) return 0;
     
     return materia.horas_academicas_teoricas + materia.horas_academicas_practicas;
@@ -349,7 +349,7 @@ const HorarioManual = () => {
     
     // Check cycle-based time restrictions (simplified version)
     const materia = getMateriaPorGrupo(selectedGrupo);
-    const bloque = bloques.find(b => b.id === selectedBloque);
+    const bloque = bloques.find(b => b.bloque_def_id === selectedBloque);
     
     if (materia && bloque) {
       const ciclo = Math.ceil(materia.carrera / 2); // Simplified calculation
@@ -415,7 +415,7 @@ const HorarioManual = () => {
       await client.delete(`scheduling/horarios-asignados/${horarioId}/`);
       
       // Remove from local state
-      setHorarios(horarios.filter(h => h.id !== horarioId));
+      setHorarios(horarios.filter(h => h.horario_id !== horarioId));
       
       toast.success("Horario eliminado correctamente");
     } catch (error) {
@@ -450,8 +450,8 @@ const HorarioManual = () => {
                     </SelectTrigger>
                     <SelectContent>
                       {periodos.map((periodo) => (
-                        <SelectItem key={periodo.id} value={periodo.id.toString()}>
-                          {periodo.nombre}
+                        <SelectItem key={periodo.periodo_id} value={periodo.periodo_id.toString()}>
+                          {periodo.nombre_periodo}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -468,10 +468,12 @@ const HorarioManual = () => {
                       <SelectValue placeholder="Seleccionar unidad" />
                     </SelectTrigger>
                     <SelectContent>
-                      {unidades.map((unidad) => (
-                        <SelectItem key={unidad.id} value={unidad.id.toString()}>
-                          {unidad.nombre_unidad}
-                        </SelectItem>
+                       {unidades
+                        .filter((unidad) => unidad?.unidad_id !== undefined)
+                          .map((unidad) => (
+                            <SelectItem key={unidad.unidad_id} value={unidad.unidad_id.toString()}>
+                            {unidad.nombre_unidad}
+                            </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -489,7 +491,7 @@ const HorarioManual = () => {
                     </SelectTrigger>
                     <SelectContent>
                       {carreras.map((carrera) => (
-                        <SelectItem key={carrera.id} value={carrera.id.toString()}>
+                        <SelectItem key={carrera.carrera_id} value={carrera.carrera_id.toString()}>
                           {carrera.nombre_carrera}
                         </SelectItem>
                       ))}
@@ -509,9 +511,9 @@ const HorarioManual = () => {
                     </SelectTrigger>
                     <SelectContent>
                       {grupos.map((grupo) => {
-                        const materia = materias.find(m => m.id === grupo.materia);
+                        const materia = materias.find(m => m.materia_id === grupo.materia);
                         return (
-                          <SelectItem key={grupo.id} value={grupo.id.toString()}>
+                          <SelectItem key={grupo.grupo_id} value={grupo.grupo_id.toString()}>
                             {grupo.codigo_grupo} - {materia?.nombre_materia || 'Materia desconocida'}
                           </SelectItem>
                         );
@@ -526,15 +528,15 @@ const HorarioManual = () => {
                   <h4 className="font-medium mb-2">Información del Grupo</h4>
                   
                   {(() => {
-                    const grupo = grupos.find(g => g.id === selectedGrupo);
-                    const materia = grupo ? materias.find(m => m.id === grupo.materia) : null;
+                    const grupo = grupos.find(g => g.grupo_id === selectedGrupo);
+                    const materia = grupo ? materias.find(m => m.materia_id === grupo.materia) : null;
                     
                     if (!grupo || !materia) {
                       return <p>No se encontró información del grupo.</p>;
                     }
                     
                     const horasTotales = materia.horas_academicas_teoricas + materia.horas_academicas_practicas;
-                    const horasAsignadas = getHorasAsignadasGrupo(grupo.id);
+                    const horasAsignadas = getHorasAsignadasGrupo(grupo.grupo_id);
                     
                     return (
                       <div className="space-y-2 text-sm">
@@ -587,7 +589,7 @@ const HorarioManual = () => {
                         </SelectTrigger>
                         <SelectContent>
                           {docentes.map((docente) => (
-                            <SelectItem key={docente.id} value={docente.id.toString()}>
+                            <SelectItem key={docente.docente_id} value={docente.docente_id.toString()}>
                               {docente.nombres} {docente.apellidos}
                             </SelectItem>
                           ))}
@@ -606,7 +608,7 @@ const HorarioManual = () => {
                         </SelectTrigger>
                         <SelectContent>
                           {aulas.map((aula) => (
-                            <SelectItem key={aula.id} value={aula.id.toString()}>
+                            <SelectItem key={aula.espacio_id} value={aula.espacio_id.toString()}>
                               {aula.nombre_espacio} (Cap: {aula.capacidad})
                             </SelectItem>
                           ))}
@@ -646,7 +648,7 @@ const HorarioManual = () => {
                         </SelectTrigger>
                         <SelectContent>
                           {bloques.map((bloque) => (
-                            <SelectItem key={bloque.id} value={bloque.id.toString()}>
+                            <SelectItem key={bloque.bloque_def_id} value={bloque.bloque_def_id.toString()}>
                               {bloque.hora_inicio} - {bloque.hora_fin}
                             </SelectItem>
                           ))}
@@ -711,12 +713,12 @@ const HorarioManual = () => {
                       <tbody>
                         {horarios.map((horario) => {
                           const dia = diasSemana.find(d => d.id === horario.dia_semana);
-                          const bloque = bloques.find(b => b.id === horario.bloque_horario);
-                          const docente = docentes.find(d => d.id === horario.docente);
-                          const aula = aulas.find(a => a.id === horario.espacio);
+                          const bloque = bloques.find(b => b.bloque_def_id === horario.bloque_horario);
+                          const docente = docentes.find(d => d.docente_id === horario.docente);
+                          const aula = aulas.find(a => a.espacio_id=== horario.espacio);
                           
                           return (
-                            <tr key={horario.id} className="border-b hover:bg-gray-50">
+                            <tr key={horario.bloque_horario} className="border-b hover:bg-gray-50">
                               <td className="p-3">{dia?.nombre || 'Desconocido'}</td>
                               <td className="p-3">{bloque ? `${bloque.hora_inicio} - ${bloque.hora_fin}` : 'Desconocido'}</td>
                               <td className="p-3">{docente ? `${docente.nombres} ${docente.apellidos}` : 'Desconocido'}</td>
@@ -725,7 +727,7 @@ const HorarioManual = () => {
                                 <Button 
                                   variant="ghost" 
                                   size="sm"
-                                  onClick={() => handleDeleteHorario(horario.id)}
+                                  onClick={() => handleDeleteHorario(horario.bloque_horario)}
                                   className="text-red-500 hover:text-red-700 hover:bg-red-50"
                                 >
                                   Eliminar

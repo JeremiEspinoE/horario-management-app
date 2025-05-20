@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface UnidadAcademica {
-  id: number;
+  unidad_id: number;
   nombre_unidad: string;
 }
 
@@ -26,12 +26,12 @@ interface Usuario {
 }
 
 interface Especialidad {
-  id: number;
+  especialidad_id: number;
   nombre: string;
 }
 
 interface Docente {
-  id: number;
+  docente_id: number;
   usuario: number;
   codigo_docente: string;
   nombres: string;
@@ -42,7 +42,7 @@ interface Docente {
   tipo_contrato: string;
   max_horas_semanales: number;
   unidad_principal: number;
-  especialidades: number[];
+  especialidades_detalle: Especialidad[];
 }
 
 // Schema for form validation
@@ -57,7 +57,11 @@ const formSchema = z.object({
   tipo_contrato: z.string().min(1, "El tipo de contrato es obligatorio"),
   max_horas_semanales: z.coerce.number().min(1, "Las horas semanales son obligatorias"),
   unidad_principal: z.number(),
-  especialidades: z.array(z.number()).default([]),
+    especialidades_detalle: z.array(z.object({
+    especialidad_id: z.number(),
+    nombre_especialidad: z.string(),
+    descripcion: z.string()
+  }))
 });
 
 const tiposContrato = [
@@ -88,7 +92,7 @@ const Docentes = () => {
       tipo_contrato: "",
       max_horas_semanales: 40,
       unidad_principal: 0,
-      especialidades: [],
+      especialidades_detalle:[],
     },
   });
 
@@ -102,13 +106,12 @@ const Docentes = () => {
       if (docentesData) {
         setDocentes(docentesData);
       }
-      
+    
       // Load unidades
       const unidadesData = await fetchData<UnidadAcademica>("academic/unidades-academicas/");
-      if (unidadesData) {
-        setUnidades(unidadesData);
-      }
-      
+        if (unidadesData) {
+        setUnidades(unidadesData);  // unidadesData ya es UnidadAcademica[]
+      }     
       // Load usuarios (para vincular)
       const usuariosData = await fetchData<Usuario>("users/all/");
       if (usuariosData) {
@@ -141,7 +144,7 @@ const Docentes = () => {
         tipo_contrato: docente.tipo_contrato,
         max_horas_semanales: docente.max_horas_semanales,
         unidad_principal: docente.unidad_principal,
-        especialidades: docente.especialidades,
+        especialidades_detalle: docente.especialidades_detalle,
       });
     } else {
       setCurrentDocente(null);
@@ -155,7 +158,7 @@ const Docentes = () => {
         tipo_contrato: "",
         max_horas_semanales: 40,
         unidad_principal: 0,
-        especialidades: [],
+        especialidades_detalle: [],
       });
     }
     setIsModalOpen(true);
@@ -176,12 +179,12 @@ const Docentes = () => {
       // Update existing docente
       const updated = await updateItem<Docente>(
         "users/docentes/", 
-        currentDocente.id, 
+        currentDocente.docente_id, 
         values
       );
       
       if (updated) {
-        setDocentes(docentes.map(d => d.id === currentDocente.id ? updated : d));
+        setDocentes(docentes.map(d => d.docente_id === currentDocente.docente_id ? updated : d));
         handleCloseModal();
       }
     } else {
@@ -206,17 +209,17 @@ const Docentes = () => {
   const confirmDelete = async () => {
     if (!currentDocente) return;
     
-    const success = await deleteItem("users/docentes/", currentDocente.id);
+    const success = await deleteItem("users/docentes/", currentDocente.docente_id);
     
     if (success) {
-      setDocentes(docentes.filter(d => d.id !== currentDocente.id));
+      setDocentes(docentes.filter(d => d.docente_id !== currentDocente.docente_id));
       setIsDeleteDialogOpen(false);
       setCurrentDocente(null);
     }
   };
 
   const getUnidadNombre = (unidadId: number) => {
-    const unidad = unidades.find(u => u.id === unidadId);
+    const unidad = unidades.find(u => u.unidad_id === unidadId);
     return unidad ? unidad.nombre_unidad : "Desconocido";
   };
 
@@ -404,11 +407,12 @@ const Docentes = () => {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {tiposContrato.map((tipo) => (
-                            <SelectItem key={tipo.value} value={tipo.value}>
-                              {tipo.label}
-                            </SelectItem>
-                          ))}
+                             {tiposContrato.filter((tipo) => tipo.value.trim() !== "") // evita vacíos
+                              .map((tipo) => (
+                        <SelectItem key={tipo.value} value={tipo.value}>
+                          {tipo.label}
+                      </SelectItem>
+                        ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -446,7 +450,7 @@ const Docentes = () => {
                       </FormControl>
                       <SelectContent>
                         {unidades.map((unidad) => (
-                          <SelectItem key={unidad.id} value={unidad.id.toString()}>
+                          <SelectItem key={unidad.unidad_id} value={unidad.unidad_id.toString()}>
                             {unidad.nombre_unidad}
                           </SelectItem>
                         ))}

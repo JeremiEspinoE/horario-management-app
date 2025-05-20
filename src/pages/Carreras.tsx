@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 
 interface UnidadAcademica {
-  id: number;
+  unidad_id: number;
   nombre_unidad: string;
 }
 

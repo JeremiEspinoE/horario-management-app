@@ -12,14 +12,14 @@ import { Loader2, Upload, RefreshCw } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 
 interface Docente {
-  id: number;
+  docente_id: number;
   nombres: string;
   apellidos: string;
   codigo_docente: string;
 }
 
 interface Periodo {
-  id: number;
+  periodo_id: number;
   nombre: string;
   fecha_inicio: string;
   fecha_fin: string;
@@ -27,14 +27,14 @@ interface Periodo {
 }
 
 interface BloqueHorario {
-  id: number;
+  bloque_def_id: number;
   hora_inicio: string;
   hora_fin: string;
   orden: number;
 }
 
 interface DisponibilidadBloque {
-  id: number;
+  disponibilidad_id: number;
   docente: number;
   periodo: number;
   dia_semana: number;
@@ -82,7 +82,7 @@ const DisponibilidadDocente = () => {
         
         if (periodosData && periodosData.length > 0) {
           setPeriodos(periodosData);
-          setSelectedPeriodo(periodosData[0].id);
+          setSelectedPeriodo(periodosData[0].periodo_id);
         } else {
           console.log("No periodos found or empty array returned");
           setPeriodos([]);
@@ -106,7 +106,7 @@ const DisponibilidadDocente = () => {
           
           if (docentesData && docentesData.length > 0) {
             setDocentes(docentesData);
-            setSelectedDocente(docentesData[0].id);
+            setSelectedDocente(docentesData[0].docente_id);
           } else {
             console.log("No docentes found or empty array returned");
             setDocentes([]);
@@ -174,14 +174,14 @@ const DisponibilidadDocente = () => {
     try {
       if (existeBloque) {
         // Actualizar disponibilidad existente
-        console.log(`Updating disponibilidad ${existeBloque.id} to ${!existeBloque.esta_disponible}`);
-        await client.patch(`/scheduling/disponibilidad-docentes/${existeBloque.id}/`, {
+        console.log(`Updating disponibilidad ${existeBloque.bloque_horario} to ${!existeBloque.esta_disponible}`);
+        await client.patch(`/scheduling/disponibilidad-docentes/${existeBloque.bloque_horario}/`, {
           esta_disponible: !existeBloque.esta_disponible
         });
         
         // Actualizar estado local
         setDisponibilidad(disponibilidad.map(d => 
-          d.id === existeBloque.id 
+          d.disponibilidad_id === existeBloque.disponibilidad_id
             ? { ...d, esta_disponible: !d.esta_disponible } 
             : d
         ));
@@ -309,7 +309,7 @@ const DisponibilidadDocente = () => {
                     </SelectTrigger>
                     <SelectContent>
                       {docentes.map((docente) => (
-                        <SelectItem key={docente.id} value={docente.id.toString()}>
+                        <SelectItem key={docente.docente_id} value={docente.docente_id.toString()}>
                           {docente.nombres} {docente.apellidos} ({docente.codigo_docente})
                         </SelectItem>
                       ))}
@@ -329,7 +329,7 @@ const DisponibilidadDocente = () => {
                   </SelectTrigger>
                   <SelectContent>
                     {periodos.map((periodo) => (
-                      <SelectItem key={periodo.id} value={periodo.id.toString()}>
+                      <SelectItem key={periodo.periodo_id} value={periodo.periodo_id.toString()}>
                         {periodo.nombre}
                       </SelectItem>
                     ))}
@@ -391,26 +391,26 @@ const DisponibilidadDocente = () => {
                 </thead>
                 <tbody>
                   {bloques.map((bloque) => (
-                    <tr key={bloque.id} className="border-b hover:bg-gray-50">
+                    <tr key={bloque.bloque_def_id} className="border-b hover:bg-gray-50">
                       <td className="p-3 font-medium">
                         {bloque.hora_inicio} - {bloque.hora_fin}
                       </td>
                       {diasSemana.map((dia) => (
                         <td 
-                          key={`${bloque.id}-${dia.id}`} 
+                          key={`${bloque.bloque_def_id}-${dia.id}`} 
                           className="p-3 text-center"
                         >
                           <button
                             className={`w-6 h-6 rounded-full transition-colors ${
-                              isDisponible(dia.id, bloque.id) 
+                              isDisponible(dia.id, bloque.bloque_def_id) 
                                 ? 'bg-green-500 hover:bg-green-600' 
                                 : 'bg-gray-200 hover:bg-gray-300'
                             }`}
-                            onClick={() => handleToggleDisponibilidad(dia.id, bloque.id)}
+                            onClick={() => handleToggleDisponibilidad(dia.id, bloque.bloque_def_id)}
                             disabled={isSaving}
                             type="button"
                           >
-                            {isDisponible(dia.id, bloque.id) && (
+                            {isDisponible(dia.id, bloque.bloque_def_id) && (
                               <span className="text-white">✓</span>
                             )}
                           </button>

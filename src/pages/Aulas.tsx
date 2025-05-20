@@ -14,17 +14,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface UnidadAcademica {
-  id: number;
+  unidad_id: number;
   nombre_unidad: string;
 }
 
 interface TipoEspacio {
-  id: number;
+  tipo_espacio_id: number;
   nombre: string;
 }
 
 interface Aula {
-  id: number;
+  espacio_id: number;
   nombre_espacio: string;
   tipo_espacio: number;
   capacidad: number;
@@ -108,11 +108,11 @@ const Aulas = () => {
       setCurrentAula(null);
       form.reset({
         nombre_espacio: "",
-        tipo_espacio: tiposEspacios.length > 0 ? tiposEspacios[0].id : 0,
+        tipo_espacio: tiposEspacios.length > 0 ? tiposEspacios[0].tipo_espacio_id : 0,
         capacidad: 0,
         ubicacion: "",
         recursos_adicionales: "",
-        unidad: unidades.length > 0 ? unidades[0].id : 0,
+        unidad: unidades.length > 0 ? unidades[0].unidad_id : 0,
       });
     }
     setIsModalOpen(true);
@@ -133,12 +133,12 @@ const Aulas = () => {
       // Update existing aula
       const updated = await updateItem<Aula>(
         "academic/espacios-fisicos/", 
-        currentAula.id, 
+        currentAula.espacio_id, 
         values
       );
       
       if (updated) {
-        setAulas(aulas.map(a => a.id === currentAula.id ? updated : a));
+        setAulas(aulas.map(a => a.espacio_id === currentAula.espacio_id ? updated : a));
         handleCloseModal();
       }
     } else {
@@ -163,22 +163,22 @@ const Aulas = () => {
   const confirmDelete = async () => {
     if (!currentAula) return;
     
-    const success = await deleteItem("academic/espacios-fisicos/", currentAula.id);
+    const success = await deleteItem("academic/espacios-fisicos/", currentAula.espacio_id);
     
     if (success) {
-      setAulas(aulas.filter(a => a.id !== currentAula.id));
+      setAulas(aulas.filter(a => a.espacio_id !== currentAula.espacio_id));
       setIsDeleteDialogOpen(false);
       setCurrentAula(null);
     }
   };
 
   const getTipoEspacioNombre = (tipoId: number) => {
-    const tipo = tiposEspacios.find(t => t.id === tipoId);
+    const tipo = tiposEspacios.find(t => t.tipo_espacio_id === tipoId);
     return tipo ? tipo.nombre : "Desconocido";
   };
 
   const getUnidadNombre = (unidadId: number) => {
-    const unidad = unidades.find(u => u.id === unidadId);
+    const unidad = unidades.find(u => u.unidad_id === unidadId);
     return unidad ? unidad.nombre_unidad : "Desconocido";
   };
 
@@ -257,7 +257,7 @@ const Aulas = () => {
                       </FormControl>
                       <SelectContent>
                         {tiposEspacios.map((tipo) => (
-                          <SelectItem key={tipo.id} value={tipo.id.toString()}>
+                          <SelectItem key={tipo.tipo_espacio_id} value={tipo.tipo_espacio_id.toString()}>
                             {tipo.nombre}
                           </SelectItem>
                         ))}
@@ -328,7 +328,7 @@ const Aulas = () => {
                       </FormControl>
                       <SelectContent>
                         {unidades.map((unidad) => (
-                          <SelectItem key={unidad.id} value={unidad.id.toString()}>
+                          <SelectItem key={unidad.unidad_id} value={unidad.unidad_id.toString()}>
                             {unidad.nombre_unidad}
                           </SelectItem>
                         ))}
