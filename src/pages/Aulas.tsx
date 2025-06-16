@@ -20,7 +20,7 @@ interface UnidadAcademica {
 
 interface TipoEspacio {
   tipo_espacio_id: number;
-  nombre: string;
+  nombre_tipo_espacio: string;
 }
 
 interface Aula {
@@ -174,7 +174,7 @@ const Aulas = () => {
 
   const getTipoEspacioNombre = (tipoId: number) => {
     const tipo = tiposEspacios.find(t => t.tipo_espacio_id === tipoId);
-    return tipo ? tipo.nombre : "Desconocido";
+    return tipo ? tipo.nombre_tipo_espacio : "Desconocido";
   };
 
   const getUnidadNombre = (unidadId: number) => {
@@ -258,7 +258,7 @@ const Aulas = () => {
                       <SelectContent>
                         {tiposEspacios.map((tipo) => (
                           <SelectItem key={tipo.tipo_espacio_id} value={tipo.tipo_espacio_id.toString()}>
-                            {tipo.nombre}
+                            {tipo.nombre_tipo_espacio}
                           </SelectItem>
                         ))}
                       </SelectContent>

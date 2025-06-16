@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -13,42 +12,65 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Carrera {
-  id: number;
+  carrera_id: number;
   nombre_carrera: string;
 }
 
 interface Materia {
-  id: number;
+  materia_id: number;
   nombre_materia: string;
   codigo_materia: string;
   carrera: number; // Added missing property
 }
 
 interface Periodo {
-  id: number;
-  nombre: string;
+  periodo_id: number;
+  nombre_periodo: string;
 }
 
 interface Docente {
-  id: number;
+  docente_id: number;
   nombres: string;
   apellidos: string;
   codigo_docente: string;
 }
 
+interface MateriaDetalle {
+  materia_id: number;
+  codigo_materia: string;
+  nombre_materia: string;
+  descripcion: string;
+  horas_academicas_teoricas: number;
+  horas_academicas_practicas: number;
+  horas_academicas_laboratorio: number;
+  horas_totales: number;
+  requiere_tipo_espacio_especifico: number | null;
+  requiere_tipo_espacio_nombre: string | null;
+  estado: boolean;
+}
+
+interface CarreraDetalle {
+  carrera_id: number;
+  nombre_carrera: string;
+  codigo_carrera: string;
+  horas_totales_curricula: number;
+  unidad: number;
+  unidad_nombre: string;
+}
+
 interface Grupo {
-  id: number;
+  grupo_id: number;
   codigo_grupo: string;
   materia: number;
+  materia_detalle: MateriaDetalle;
   carrera: number;
+  carrera_detalle: CarreraDetalle;
   periodo: number;
+  periodo_nombre: string;
   numero_estudiantes_estimado: number;
   turno_preferente: string;
   docente_asignado_directamente: number | null;
-  materia_nombre?: string;
-  carrera_nombre?: string;
-  periodo_nombre?: string;
-  docente_nombre?: string;
+  docente_asignado_directamente_nombre: string | null;
 }
 
 // Schema for form validation
@@ -114,46 +136,40 @@ const Grupos = () => {
     const loadData = async () => {
       setIsLoading(true);
       
-      // Load grupos
-      const gruposData = await fetchData<Grupo>("scheduling/grupos/");
-      
-      // Load carreras
-      const carrerasData = await fetchData<Carrera>("academic/carreras/");
-      
-      // Load materias
-      const materiasData = await fetchData<Materia>("academic/materias/");
-      
-      // Load periodos
-      const periodosData = await fetchData<Periodo>("academic/periodos-academicos/");
-      
-      // Load docentes
-      const docentesData = await fetchData<Docente>("users/docentes/");
-      
-      if (gruposData && carrerasData && materiasData && periodosData && docentesData) {
-        // Enrich grupos with related info
-        const enrichedGrupos = gruposData.map(grupo => {
-          const materia = materiasData.find(m => m.id === grupo.materia);
-          const carrera = carrerasData.find(c => c.id === grupo.carrera);
-          const periodo = periodosData.find(p => p.id === grupo.periodo);
-          const docente = docentesData.find(d => d.id === grupo.docente_asignado_directamente);
-          
-          return {
-            ...grupo,
-            materia_nombre: materia ? materia.nombre_materia : 'Desconocido',
-            carrera_nombre: carrera ? carrera.nombre_carrera : 'Desconocido',
-            periodo_nombre: periodo ? periodo.nombre : 'Desconocido',
-            docente_nombre: docente ? `${docente.nombres} ${docente.apellidos}` : '---',
-          };
-        });
+      try {
+        // Load grupos
+        const gruposData = await fetchData<Grupo>("scheduling/grupos/");
         
-        setGrupos(enrichedGrupos);
+        // Load carreras
+        const carrerasResponseArr = await fetchData<{ results: Carrera[] }>("academic/carreras/");
+        const carrerasResponse = Array.isArray(carrerasResponseArr) ? carrerasResponseArr[0] : carrerasResponseArr;
+        const carrerasData = carrerasResponse?.results || [];
+        
+        // Load materias
+        const materiasResponseArr = await fetchData<{ results: Materia[] }>("academic/materias/");
+        const materiasResponse = Array.isArray(materiasResponseArr) ? materiasResponseArr[0] : materiasResponseArr;
+        const materiasData = materiasResponse?.results || [];
+        
+        // Load periodos
+        const periodosResponseArr = await fetchData<{ results: Periodo[] }>("academic/periodos-academicos/");
+        const periodosResponse = Array.isArray(periodosResponseArr) ? periodosResponseArr[0] : periodosResponseArr;
+        const periodosData = periodosResponse?.results || [];
+        
+        // Load docentes
+        const docentesResponseArr = await fetchData<{ results: Docente[] }>("users/docentes/");
+        const docentesResponse = Array.isArray(docentesResponseArr) ? docentesResponseArr[0] : docentesResponseArr;
+        const docentesData = docentesResponse?.results || [];
+        
+        setGrupos(gruposData);
         setCarreras(carrerasData);
         setMaterias(materiasData);
         setPeriodos(periodosData);
         setDocentes(docentesData);
+      } catch (error) {
+        console.error("Error loading data:", error);
+      } finally {
+        setIsLoading(false);
       }
-      
-      setIsLoading(false);
     };
     
     loadData();
@@ -201,26 +217,12 @@ const Grupos = () => {
       // Update existing grupo
       const updated = await updateItem<Grupo>(
         "scheduling/grupos/", 
-        currentGrupo.id, 
+        currentGrupo.grupo_id, 
         values
       );
       
       if (updated) {
-        // Enrich updated grupo with additional info
-        const materia = materias.find(m => m.id === updated.materia);
-        const carrera = carreras.find(c => c.id === updated.carrera);
-        const periodo = periodos.find(p => p.id === updated.periodo);
-        const docente = docentes.find(d => d.id === updated.docente_asignado_directamente);
-        
-        const enrichedUpdated = {
-          ...updated,
-          materia_nombre: materia ? materia.nombre_materia : 'Desconocido',
-          carrera_nombre: carrera ? carrera.nombre_carrera : 'Desconocido',
-          periodo_nombre: periodo ? periodo.nombre : 'Desconocido',
-          docente_nombre: docente ? `${docente.nombres} ${docente.apellidos}` : '---',
-        };
-        
-        setGrupos(grupos.map(g => g.id === currentGrupo.id ? enrichedUpdated : g));
+        setGrupos(grupos.map(g => g.grupo_id === currentGrupo.grupo_id ? updated : g));
         handleCloseModal();
       }
     } else {
@@ -231,21 +233,7 @@ const Grupos = () => {
       );
       
       if (created) {
-        // Enrich created grupo with additional info
-        const materia = materias.find(m => m.id === created.materia);
-        const carrera = carreras.find(c => c.id === created.carrera);
-        const periodo = periodos.find(p => p.id === created.periodo);
-        const docente = docentes.find(d => d.id === created.docente_asignado_directamente);
-        
-        const enrichedCreated = {
-          ...created,
-          materia_nombre: materia ? materia.nombre_materia : 'Desconocido',
-          carrera_nombre: carrera ? carrera.nombre_carrera : 'Desconocido',
-          periodo_nombre: periodo ? periodo.nombre : 'Desconocido',
-          docente_nombre: docente ? `${docente.nombres} ${docente.apellidos}` : '---',
-        };
-        
-        setGrupos([...grupos, enrichedCreated]);
+        setGrupos([...grupos, created]);
         handleCloseModal();
       }
     }
@@ -259,10 +247,10 @@ const Grupos = () => {
   const confirmDelete = async () => {
     if (!currentGrupo) return;
     
-    const success = await deleteItem("scheduling/grupos/", currentGrupo.id);
+    const success = await deleteItem("scheduling/grupos/", currentGrupo.grupo_id);
     
     if (success) {
-      setGrupos(grupos.filter(g => g.id !== currentGrupo.id));
+      setGrupos(grupos.filter(g => g.grupo_id !== currentGrupo.grupo_id));
       setIsDeleteDialogOpen(false);
       setCurrentGrupo(null);
     }
@@ -275,16 +263,24 @@ const Grupos = () => {
 
   const columns = [
     { key: "codigo_grupo", header: "Código" },
-    { key: "materia_nombre", header: "Materia" },
-    { key: "carrera_nombre", header: "Carrera" },
+    {
+      key: "materia_detalle.nombre_materia",
+      header: "Materia",
+      render: (row: Grupo) => row.materia_detalle?.nombre_materia || ""
+    },
+    {
+      key: "carrera_detalle.nombre_carrera",
+      header: "Carrera",
+      render: (row: Grupo) => row.carrera_detalle?.nombre_carrera || ""
+    },
     { key: "periodo_nombre", header: "Periodo" },
     { key: "numero_estudiantes_estimado", header: "Estudiantes" },
-    { 
-      key: "turno_preferente", 
+    {
+      key: "turno_preferente",
       header: "Turno",
       render: (row: Grupo) => getTurnoLabel(row.turno_preferente)
     },
-    { key: "docente_nombre", header: "Docente asignado" },
+    { key: "docente_asignado_directamente_nombre", header: "Docente asignado" },
   ];
 
   return (
@@ -351,7 +347,7 @@ const Grupos = () => {
                       <SelectContent>
                         <SelectItem value="0">Seleccionar...</SelectItem>
                         {carreras.map((carrera) => (
-                          <SelectItem key={carrera.id} value={carrera.id.toString()}>
+                          <SelectItem key={carrera.carrera_id} value={carrera.carrera_id.toString()}>
                             {carrera.nombre_carrera}
                           </SelectItem>
                         ))}
@@ -382,7 +378,7 @@ const Grupos = () => {
                           <SelectItem value="0">No hay materias disponibles</SelectItem>
                         )}
                         {materiasFiltradas.map((materia) => (
-                          <SelectItem key={materia.id} value={materia.id.toString()}>
+                          <SelectItem key={materia.materia_id} value={materia.materia_id.toString()}>
                             {materia.codigo_materia} - {materia.nombre_materia}
                           </SelectItem>
                         ))}
@@ -409,8 +405,8 @@ const Grupos = () => {
                       </FormControl>
                       <SelectContent>
                         {periodos.map((periodo) => (
-                          <SelectItem key={periodo.id} value={periodo.id.toString()}>
-                            {periodo.nombre}
+                          <SelectItem key={periodo.periodo_id} value={periodo.periodo_id.toString()}>
+                            {periodo.nombre_periodo}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -468,8 +464,8 @@ const Grupos = () => {
                   <FormItem>
                     <FormLabel>Docente asignado (opcional)</FormLabel>
                     <Select
-                      onValueChange={(value) => field.onChange(value ? parseInt(value) : null)}
-                      value={field.value?.toString() || ""}
+                      onValueChange={(value) => field.onChange(value === "none" ? null : parseInt(value))}
+                      value={field.value?.toString() || "none"}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -477,9 +473,9 @@ const Grupos = () => {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">Sin asignación directa</SelectItem>
+                        <SelectItem value="none">Sin asignación directa</SelectItem>
                         {docentes.map((docente) => (
-                          <SelectItem key={docente.id} value={docente.id.toString()}>
+                          <SelectItem key={docente.docente_id} value={docente.docente_id.toString()}>
                             {docente.nombres} {docente.apellidos} ({docente.codigo_docente})
                           </SelectItem>
                         ))}

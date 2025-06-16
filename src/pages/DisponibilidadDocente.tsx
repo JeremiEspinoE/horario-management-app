@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -20,7 +19,7 @@ interface Docente {
 
 interface Periodo {
   periodo_id: number;
-  nombre: string;
+  nombre_periodo: string;
   fecha_inicio: string;
   fecha_fin: string;
   activo: boolean;
@@ -148,11 +147,12 @@ const DisponibilidadDocente = () => {
       console.log(`Loading disponibilidad for docente ${selectedDocente} and periodo ${selectedPeriodo}`);
       const response = await client.get(`/scheduling/disponibilidad-docentes/?docente=${selectedDocente}&periodo=${selectedPeriodo}`);
       console.log("Disponibilidad loaded:", response.data);
-      setDisponibilidad(response.data);
+      setDisponibilidad(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error("Error cargando disponibilidad:", error);
       setError("Error al cargar la disponibilidad. Por favor, intente nuevamente.");
       toast.error("Error al cargar la disponibilidad");
+      setDisponibilidad([]);
     } finally {
       setIsLoading(false);
     }
@@ -174,8 +174,8 @@ const DisponibilidadDocente = () => {
     try {
       if (existeBloque) {
         // Actualizar disponibilidad existente
-        console.log(`Updating disponibilidad ${existeBloque.bloque_horario} to ${!existeBloque.esta_disponible}`);
-        await client.patch(`/scheduling/disponibilidad-docentes/${existeBloque.bloque_horario}/`, {
+        console.log(`Updating disponibilidad ${existeBloque.disponibilidad_id} to ${!existeBloque.esta_disponible}`);
+        await client.patch(`/scheduling/disponibilidad-docentes/${existeBloque.disponibilidad_id}/`, {
           esta_disponible: !existeBloque.esta_disponible
         });
         
@@ -202,9 +202,15 @@ const DisponibilidadDocente = () => {
       }
       
       toast.success("Disponibilidad actualizada");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error actualizando disponibilidad:", error);
-      toast.error("Error al actualizar la disponibilidad");
+      if (error.response?.data?.non_field_errors) {
+        toast.error(error.response.data.non_field_errors[0]);
+      } else {
+        toast.error("Error al actualizar la disponibilidad");
+      }
+      // Recargar la disponibilidad para asegurar que el estado esté sincronizado
+      await loadDisponibilidad();
     } finally {
       setIsSaving(false);
     }
@@ -258,6 +264,10 @@ const DisponibilidadDocente = () => {
   };
 
   const isDisponible = (dia: number, bloque: number): boolean => {
+    if (!Array.isArray(disponibilidad)) {
+      console.warn('disponibilidad no es un array:', disponibilidad);
+      return false;
+    }
     const bloqueDisponibilidad = disponibilidad.find(
       d => d.dia_semana === dia && d.bloque_horario === bloque
     );
@@ -330,7 +340,7 @@ const DisponibilidadDocente = () => {
                   <SelectContent>
                     {periodos.map((periodo) => (
                       <SelectItem key={periodo.periodo_id} value={periodo.periodo_id.toString()}>
-                        {periodo.nombre}
+                        {periodo.nombre_periodo}
                       </SelectItem>
                     ))}
                   </SelectContent>

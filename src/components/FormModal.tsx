@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -36,7 +35,9 @@ const FormModal = ({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          {description && <DialogDescription>{description}</DialogDescription>}
+          <DialogDescription>
+            {/* Puedes personalizar esta descripción si lo deseas */}
+          </DialogDescription>
         </DialogHeader>
         <div className="py-4">{form}</div>
         <DialogFooter>

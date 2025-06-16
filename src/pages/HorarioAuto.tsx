@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -30,8 +29,8 @@ import {
 import { Progress } from "@/components/ui/progress";
 
 interface Periodo {
-  id: number;
-  nombre: string;
+  periodo_id: number;
+  nombre_periodo: string;
   fecha_inicio: string;
   fecha_fin: string;
   activo: boolean;
@@ -69,7 +68,7 @@ const HorarioAuto = () => {
         const periodosData = await fetchData<Periodo>("academic/periodos-academicos/?activo=true");
         if (periodosData && periodosData.length > 0) {
           setPeriodos(periodosData);
-          setSelectedPeriodo(periodosData[0].id);
+          setSelectedPeriodo(periodosData[0].periodo_id);
         }
       } catch (error) {
         console.error("Error cargando periodos:", error);
@@ -148,8 +147,8 @@ const HorarioAuto = () => {
                     </SelectTrigger>
                     <SelectContent>
                       {periodos.map((periodo) => (
-                        <SelectItem key={periodo.id} value={periodo.id.toString()}>
-                          {periodo.nombre}
+                        <SelectItem key={periodo.periodo_id} value={periodo.periodo_id.toString()}>
+                          {periodo.nombre_periodo}
                         </SelectItem>
                       ))}
                     </SelectContent>

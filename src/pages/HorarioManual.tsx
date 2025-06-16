@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import client from "@/utils/axiosClient";
@@ -15,22 +14,42 @@ interface UnidadAcademica {
   nombre_unidad: string;
 }
 
-interface Carrera {
+interface CarreraDetalle {
   carrera_id: number;
   nombre_carrera: string;
   codigo_carrera: string;
+  horas_totales_curricula: number;
   unidad: number;
+  unidad_nombre: string;
+}
+
+interface MateriaDetalle {
+  materia_id: number;
+  codigo_materia: string;
+  nombre_materia: string;
+  descripcion: string;
+  horas_academicas_teoricas: number;
+  horas_academicas_practicas: number;
+  horas_academicas_laboratorio: number;
+  horas_totales: number;
+  requiere_tipo_espacio_especifico: number | null;
+  requiere_tipo_espacio_nombre: string | null;
+  estado: boolean;
 }
 
 interface Grupo {
   grupo_id: number;
   codigo_grupo: string;
   materia: number;
+  materia_detalle: MateriaDetalle;
   carrera: number;
+  carrera_detalle: CarreraDetalle;
   periodo: number;
+  periodo_nombre: string;
   numero_estudiantes_estimado: number;
   turno_preferente: string;
-  docente_asignado_directamente?: number;
+  docente_asignado_directamente: number | null;
+  docente_asignado_directamente_nombre: string | null;
 }
 
 interface Materia {
@@ -104,7 +123,7 @@ const diasSemana = [
 const HorarioManual = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [unidades, setUnidades] = useState<UnidadAcademica[]>([]);
-  const [carreras, setCarreras] = useState<Carrera[]>([]);
+  const [carreras, setCarreras] = useState<CarreraDetalle[]>([]);
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [materias, setMaterias] = useState<Materia[]>([]);
   const [docentes, setDocentes] = useState<Docente[]>([]);
@@ -169,7 +188,7 @@ const HorarioManual = () => {
       const loadCarreras = async () => {
         setIsLoading(true);
         try {
-          const carrerasData = await fetchData<Carrera>(`academic/carreras/?unidad=${selectedUnidad}`);
+          const carrerasData = await fetchData<CarreraDetalle>(`academic/carreras/?unidad=${selectedUnidad}`);
           if (carrerasData) {
             setCarreras(carrerasData);
             setSelectedCarrera(null);
@@ -279,11 +298,9 @@ const HorarioManual = () => {
     }
   }, [selectedDocente, selectedPeriodo]);
   
-  const getMateriaPorGrupo = (grupoId: number): Materia | undefined => {
+  const getMateriaPorGrupo = (grupoId: number): MateriaDetalle | undefined => {
     const grupo = grupos.find(g => g.grupo_id === grupoId);
-    if (!grupo) return undefined;
-    
-    return materias.find(m => m.materia_id === grupo.materia);
+    return grupo?.materia_detalle;
   };
   
   const getMateriaHorasTotales = (materiaId: number): number => {
@@ -348,11 +365,11 @@ const HorarioManual = () => {
     }
     
     // Check cycle-based time restrictions (simplified version)
-    const materia = getMateriaPorGrupo(selectedGrupo);
+    const grupo = grupos.find(g => g.grupo_id === selectedGrupo);
     const bloque = bloques.find(b => b.bloque_def_id === selectedBloque);
     
-    if (materia && bloque) {
-      const ciclo = Math.ceil(materia.carrera / 2); // Simplified calculation
+    if (grupo && bloque) {
+      const ciclo = Math.ceil(grupo.carrera_detalle.horas_totales_curricula / 2); // Simplified calculation
       const horaInicio = parseInt(bloque.hora_inicio.split(':')[0]);
       
       if (ciclo <= 3 && (horaInicio < 7 || horaInicio > 13)) {
@@ -510,14 +527,11 @@ const HorarioManual = () => {
                       <SelectValue placeholder="Seleccionar grupo" />
                     </SelectTrigger>
                     <SelectContent>
-                      {grupos.map((grupo) => {
-                        const materia = materias.find(m => m.materia_id === grupo.materia);
-                        return (
-                          <SelectItem key={grupo.grupo_id} value={grupo.grupo_id.toString()}>
-                            {grupo.codigo_grupo} - {materia?.nombre_materia || 'Materia desconocida'}
-                          </SelectItem>
-                        );
-                      })}
+                      {grupos.map((grupo) => (
+                        <SelectItem key={grupo.grupo_id} value={grupo.grupo_id.toString()}>
+                          {grupo.codigo_grupo} - {grupo.materia_detalle.nombre_materia}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -529,24 +543,23 @@ const HorarioManual = () => {
                   
                   {(() => {
                     const grupo = grupos.find(g => g.grupo_id === selectedGrupo);
-                    const materia = grupo ? materias.find(m => m.materia_id === grupo.materia) : null;
                     
-                    if (!grupo || !materia) {
+                    if (!grupo) {
                       return <p>No se encontró información del grupo.</p>;
                     }
                     
-                    const horasTotales = materia.horas_academicas_teoricas + materia.horas_academicas_practicas;
+                    const horasTotales = grupo.materia_detalle.horas_academicas_teoricas + grupo.materia_detalle.horas_academicas_practicas;
                     const horasAsignadas = getHorasAsignadasGrupo(grupo.grupo_id);
                     
                     return (
                       <div className="space-y-2 text-sm">
                         <div className="flex items-center">
                           <BookOpen className="w-4 h-4 mr-2 text-academic-primary" />
-                          <span>{materia.nombre_materia}</span>
+                          <span>{grupo.materia_detalle.nombre_materia}</span>
                         </div>
                         <div className="flex items-center">
                           <Clock className="w-4 h-4 mr-2 text-academic-primary" />
-                          <span>Horas necesarias: {horasTotales} ({materia.horas_academicas_teoricas} teóricas + {materia.horas_academicas_practicas} prácticas)</span>
+                          <span>Horas necesarias: {horasTotales} ({grupo.materia_detalle.horas_academicas_teoricas} teóricas + {grupo.materia_detalle.horas_academicas_practicas} prácticas)</span>
                         </div>
                         <div className="flex items-center">
                           <Calendar className="w-4 h-4 mr-2 text-academic-primary" />
