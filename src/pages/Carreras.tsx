@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
@@ -26,6 +25,7 @@ interface Carrera {
   codigo_carrera: string;
   horas_totales_curricula: number;
   unidad: number;
+  carrera_id: number;
 }
 
 // Schema for form validation
@@ -130,12 +130,12 @@ const Carreras = () => {
       // Update existing carrera
       const updated = await updateItem<Carrera>(
         "academic/carreras/", 
-        currentCarrera.id, 
+        currentCarrera.carrera_id, 
         values
       );
       
       if (updated) {
-        setCarreras(carreras.map(c => c.id === currentCarrera.id ? updated : c));
+        setCarreras(carreras.map(c => c.carrera_id === currentCarrera.carrera_id ? updated : c));
         handleCloseModal();
       }
     } else {
@@ -160,17 +160,17 @@ const Carreras = () => {
   const confirmDelete = async () => {
     if (!currentCarrera) return;
     
-    const success = await deleteItem("academic/carreras/", currentCarrera.id);
+    const success = await deleteItem("academic/carreras/", currentCarrera.carrera_id);
     
     if (success) {
-      setCarreras(carreras.filter(c => c.id !== currentCarrera.id));
+      setCarreras(carreras.filter(c => c.carrera_id !== currentCarrera.carrera_id));
       setIsDeleteDialogOpen(false);
       setCurrentCarrera(null);
     }
   };
 
   const handleViewMaterias = (carrera: Carrera) => {
-    navigate(`/admin/carreras/${carrera.id}/materias`);
+    navigate(`/admin/carreras/${carrera.carrera_id}/materias`);
   };
 
   const columns = [

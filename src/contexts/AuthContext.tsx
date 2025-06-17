@@ -1,7 +1,7 @@
-
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
 import { toast } from "sonner";
 import axios from 'axios';
+import client from '@/utils/axiosClient';
 
 type Role = 'Docente' | 'Administrador' | null;
 
@@ -68,6 +68,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setAccessToken(storedAccessToken);
       setRefreshToken(storedRefreshToken);
       setUser(storedUser);
+      
+      // Configurar el token en el cliente axios
+      client.defaults.headers.common['Authorization'] = `Bearer ${storedAccessToken}`;
     }
     
     setIsLoading(false);
@@ -76,7 +79,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
       setIsLoading(true);
-      const response = await axios.post('http://localhost:8000/api/auth/token/', {
+      const response = await axios.post('http://localhost:8000/api/auth/login/', {
         username,
         password
       }, {
@@ -87,18 +90,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       const { access, refresh, user_data } = response.data;
       
+      // Guardar tokens en localStorage
       localStorage.setItem('accessToken', access);
       localStorage.setItem('refreshToken', refresh);
       
-      // If we get user data from the API, store it
+      // Guardar datos del usuario
       if (user_data) {
         localStorage.setItem('user', JSON.stringify(user_data));
         setUser(user_data);
       }
       
+      // Actualizar estado
       setAccessToken(access);
       setRefreshToken(refresh);
       setIsAuthenticated(true);
+      
+      // Configurar el token en el cliente axios
+      client.defaults.headers.common['Authorization'] = `Bearer ${access}`;
       
       return true;
     } catch (error) {
@@ -111,16 +119,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const logout = () => {
+    // Limpiar localStorage
     localStorage.removeItem('role');
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
     
+    // Limpiar estado
     setIsAuthenticated(false);
     setRole(null);
     setAccessToken(null);
     setRefreshToken(null);
     setUser(null);
+    
+    // Limpiar token del cliente axios
+    delete client.defaults.headers.common['Authorization'];
   };
 
   return (

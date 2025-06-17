@@ -10,20 +10,24 @@ import PageHeader from "@/components/PageHeader";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 
 interface Carrera {
   carrera_id: number;
   nombre_carrera: string;
+  codigo_carrera: string;
+  unidad: number;
 }
 
-interface Materia {
+interface Materia { 
   materia_id: number;
   nombre_materia: string;
   codigo_materia: string;
-  carrera: number; // Added missing property
+  carrera: number;
 }
 
-interface Periodo {
+interface PeriodoAcademico {
   periodo_id: number;
   nombre_periodo: string;
 }
@@ -73,14 +77,20 @@ interface Grupo {
   docente_asignado_directamente_nombre: string | null;
 }
 
+interface Column {
+  header: string;
+  key: string;
+  render?: (row: any) => React.ReactNode;
+}
+
 // Schema for form validation
 const formSchema = z.object({
   codigo_grupo: z.string().min(1, "El código es obligatorio"),
-  materia: z.number(),
-  carrera: z.number(),
-  periodo: z.number(),
-  numero_estudiantes_estimado: z.coerce.number().min(0),
-  turno_preferente: z.string(),
+  materia: z.number().min(1, "Debe seleccionar una materia"),
+  carrera: z.number().min(1, "Debe seleccionar una carrera"),
+  periodo: z.number().min(1, "Debe seleccionar un período"),
+  numero_estudiantes_estimado: z.coerce.number().min(1, "Debe ingresar un número válido de estudiantes"),
+  turno_preferente: z.string().min(1, "Debe seleccionar un turno"),
   docente_asignado_directamente: z.union([
     z.coerce.number().min(1),
     z.literal("").transform(() => null),
@@ -99,12 +109,13 @@ const Grupos = () => {
   const [carreras, setCarreras] = useState<Carrera[]>([]);
   const [materias, setMaterias] = useState<Materia[]>([]);
   const [materiasFiltradas, setMateriasFiltradas] = useState<Materia[]>([]);
-  const [periodos, setPeriodos] = useState<Periodo[]>([]);
+  const [periodos, setPeriodos] = useState<PeriodoAcademico[]>([]);
   const [docentes, setDocentes] = useState<Docente[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [currentGrupo, setCurrentGrupo] = useState<Grupo | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -126,52 +137,57 @@ const Grupos = () => {
     if (carreraId) {
       const filteredMaterias = materias.filter(m => m.carrera === carreraId);
       setMateriasFiltradas(filteredMaterias);
+      // Reset materia selection if current selection is not valid for new carrera
+      if (form.getValues("materia") && !filteredMaterias.some(m => m.materia_id === form.getValues("materia"))) {
+        form.setValue("materia", 0);
+      }
     } else {
       setMateriasFiltradas([]);
+      form.setValue("materia", 0);
     }
-  }, [carreraId, materias]);
+  }, [carreraId, materias, form]);
 
-  // Load data on component mount
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
-      
       try {
-        // Load grupos
+        // Cargar grupos
         const gruposData = await fetchData<Grupo>("scheduling/grupos/");
-        
-        // Load carreras
-        const carrerasResponseArr = await fetchData<{ results: Carrera[] }>("academic/carreras/");
-        const carrerasResponse = Array.isArray(carrerasResponseArr) ? carrerasResponseArr[0] : carrerasResponseArr;
-        const carrerasData = carrerasResponse?.results || [];
-        
-        // Load materias
-        const materiasResponseArr = await fetchData<{ results: Materia[] }>("academic/materias/");
-        const materiasResponse = Array.isArray(materiasResponseArr) ? materiasResponseArr[0] : materiasResponseArr;
-        const materiasData = materiasResponse?.results || [];
-        
-        // Load periodos
-        const periodosResponseArr = await fetchData<{ results: Periodo[] }>("academic/periodos-academicos/");
-        const periodosResponse = Array.isArray(periodosResponseArr) ? periodosResponseArr[0] : periodosResponseArr;
-        const periodosData = periodosResponse?.results || [];
-        
-        // Load docentes
-        const docentesResponseArr = await fetchData<{ results: Docente[] }>("users/docentes/");
-        const docentesResponse = Array.isArray(docentesResponseArr) ? docentesResponseArr[0] : docentesResponseArr;
-        const docentesData = docentesResponse?.results || [];
-        
-        setGrupos(gruposData);
-        setCarreras(carrerasData);
-        setMaterias(materiasData);
-        setPeriodos(periodosData);
-        setDocentes(docentesData);
+        if (gruposData) {
+          setGrupos(gruposData);
+        }
+
+        // Cargar carreras
+        const carrerasData = await fetchData<Carrera>("academic/carreras/");
+        if (carrerasData) {
+          setCarreras(carrerasData);
+        }
+
+        // Cargar materias
+        const materiasData = await fetchData<Materia>("academic/materias/");
+        if (materiasData) {
+          setMaterias(materiasData);
+        }
+
+        // Cargar períodos
+        const periodosData = await fetchData<PeriodoAcademico>("academic/periodos-academicos/");
+        if (periodosData) {
+          setPeriodos(periodosData);
+        }
+
+        // Cargar docentes
+        const docentesData = await fetchData<Docente>("users/docentes/");
+        if (docentesData) {
+          setDocentes(docentesData);
+        }
       } catch (error) {
         console.error("Error loading data:", error);
+        toast.error("Error al cargar los datos");
       } finally {
         setIsLoading(false);
       }
     };
-    
+
     loadData();
   }, []);
 
@@ -211,31 +227,41 @@ const Grupos = () => {
     const isValid = await form.trigger();
     if (!isValid) return;
 
+    setIsSaving(true);
     const values = form.getValues();
     
-    if (currentGrupo) {
-      // Update existing grupo
-      const updated = await updateItem<Grupo>(
-        "scheduling/grupos/", 
-        currentGrupo.grupo_id, 
-        values
-      );
-      
-      if (updated) {
-        setGrupos(grupos.map(g => g.grupo_id === currentGrupo.grupo_id ? updated : g));
-        handleCloseModal();
+    try {
+      if (currentGrupo) {
+        // Update existing grupo
+        const updated = await updateItem<Grupo>(
+          "scheduling/grupos/", 
+          currentGrupo.grupo_id, 
+          values
+        );
+        
+        if (updated) {
+          setGrupos(grupos.map(g => g.grupo_id === currentGrupo.grupo_id ? updated : g));
+          toast.success("Grupo actualizado exitosamente");
+          handleCloseModal();
+        }
+      } else {
+        // Create new grupo
+        const created = await createItem<Grupo>(
+          "scheduling/grupos/", 
+          values
+        );
+        
+        if (created) {
+          setGrupos([...grupos, created]);
+          toast.success("Grupo creado exitosamente");
+          handleCloseModal();
+        }
       }
-    } else {
-      // Create new grupo
-      const created = await createItem<Grupo>(
-        "scheduling/grupos/", 
-        values
-      );
-      
-      if (created) {
-        setGrupos([...grupos, created]);
-        handleCloseModal();
-      }
+    } catch (error) {
+      console.error("Error saving grupo:", error);
+      toast.error("Error al guardar el grupo");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -247,84 +273,105 @@ const Grupos = () => {
   const confirmDelete = async () => {
     if (!currentGrupo) return;
     
-    const success = await deleteItem("scheduling/grupos/", currentGrupo.grupo_id);
-    
-    if (success) {
-      setGrupos(grupos.filter(g => g.grupo_id !== currentGrupo.grupo_id));
+    try {
+      const success = await deleteItem("scheduling/grupos/", currentGrupo.grupo_id);
+      if (success) {
+        setGrupos(grupos.filter(g => g.grupo_id !== currentGrupo.grupo_id));
+        toast.success("Grupo eliminado exitosamente");
+      }
+    } catch (error) {
+      console.error("Error deleting grupo:", error);
+      toast.error("Error al eliminar el grupo");
+    } finally {
       setIsDeleteDialogOpen(false);
       setCurrentGrupo(null);
     }
   };
 
   const getTurnoLabel = (value: string) => {
-    const turno = turnos.find(t => t.value === value);
-    return turno ? turno.label : value;
+    return turnos.find(t => t.value === value)?.label || value;
   };
 
-  const columns = [
-    { key: "codigo_grupo", header: "Código" },
+  const columns: Column[] = [
     {
-      key: "materia_detalle.nombre_materia",
+      header: "Código",
+      key: "codigo_grupo",
+    },
+    {
       header: "Materia",
-      render: (row: Grupo) => row.materia_detalle?.nombre_materia || ""
+      key: "materia_detalle",
+      render: (row) => row.materia_detalle?.nombre_materia || "N/A",
     },
     {
-      key: "carrera_detalle.nombre_carrera",
       header: "Carrera",
-      render: (row: Grupo) => row.carrera_detalle?.nombre_carrera || ""
+      key: "carrera_detalle",
+      render: (row) => row.carrera_detalle?.nombre_carrera || "N/A",
     },
-    { key: "periodo_nombre", header: "Periodo" },
-    { key: "numero_estudiantes_estimado", header: "Estudiantes" },
     {
-      key: "turno_preferente",
-      header: "Turno",
-      render: (row: Grupo) => getTurnoLabel(row.turno_preferente)
+      header: "Período",
+      key: "periodo_nombre",
+      render: (row) => row.periodo_nombre || "N/A",
     },
-    { key: "docente_asignado_directamente_nombre", header: "Docente asignado" },
+    {
+      header: "Estudiantes",
+      key: "numero_estudiantes_estimado",
+    },
+    {
+      header: "Turno",
+      key: "turno_preferente",
+      render: (row) => getTurnoLabel(row.turno_preferente),
+    },
+    {
+      header: "Docente Asignado",
+      key: "docente_asignado_directamente_nombre",
+      render: (row) => row.docente_asignado_directamente_nombre || "No asignado",
+    },
   ];
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-6">
-      <PageHeader 
-        title="Grupos/Secciones" 
-        description="Administración de grupos y secciones"
+      <PageHeader
+        title="Gestión de Grupos"
+        description="Administre los grupos académicos del sistema"
         onAdd={() => handleOpenModal()}
       />
 
-      {isLoading ? (
-        <div className="flex justify-center my-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-academic-primary"></div>
-        </div>
-      ) : (
-        <DataTable 
-          data={grupos} 
-          columns={columns}
-          onEdit={handleOpenModal}
-          onDelete={handleDelete}
-        />
-      )}
+      <DataTable
+        data={grupos}
+        columns={columns}
+        onEdit={handleOpenModal}
+        onDelete={handleDelete}
+      />
 
-      {/* Form modal for creating/editing */}
       <FormModal
         isOpen={isModalOpen}
         onClose={handleCloseModal}
-        title={currentGrupo ? "Editar Grupo" : "Crear Grupo"}
+        title={currentGrupo ? "Editar Grupo" : "Nuevo Grupo"}
         form={
           <Form {...form}>
-            <div className="space-y-4">
+            <form className="space-y-4">
               <FormField
                 control={form.control}
                 name="codigo_grupo"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Código</FormLabel>
+                    <FormLabel>Código del Grupo</FormLabel>
                     <FormControl>
-                      <Input placeholder="Código del grupo" {...field} />
+                      <Input {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+
               <FormField
                 control={form.control}
                 name="carrera"
@@ -332,22 +379,20 @@ const Grupos = () => {
                   <FormItem>
                     <FormLabel>Carrera</FormLabel>
                     <Select
-                      onValueChange={(value) => {
-                        field.onChange(parseInt(value));
-                        // Reset materia when carrera changes
-                        form.setValue("materia", 0);
-                      }}
-                      value={field.value?.toString() || ""}
+                      onValueChange={(value) => field.onChange(Number(value))}
+                      value={field.value?.toString()}
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar carrera" />
+                          <SelectValue placeholder="Seleccione una carrera" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="0">Seleccionar...</SelectItem>
                         {carreras.map((carrera) => (
-                          <SelectItem key={carrera.carrera_id} value={carrera.carrera_id.toString()}>
+                          <SelectItem
+                            key={carrera.carrera_id}
+                            value={carrera.carrera_id.toString()}
+                          >
                             {carrera.nombre_carrera}
                           </SelectItem>
                         ))}
@@ -357,6 +402,7 @@ const Grupos = () => {
                   </FormItem>
                 )}
               />
+
               <FormField
                 control={form.control}
                 name="materia"
@@ -364,22 +410,22 @@ const Grupos = () => {
                   <FormItem>
                     <FormLabel>Materia</FormLabel>
                     <Select
-                      onValueChange={(value) => field.onChange(parseInt(value))}
-                      value={field.value?.toString() || ""}
-                      disabled={!carreraId || carreraId === 0}
+                      onValueChange={(value) => field.onChange(Number(value))}
+                      value={field.value?.toString()}
+                      disabled={!carreraId}
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder={carreraId === 0 ? "Seleccione carrera primero" : "Seleccionar materia"} />
+                          <SelectValue placeholder="Seleccione una materia" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {materiasFiltradas.length === 0 && (
-                          <SelectItem value="0">No hay materias disponibles</SelectItem>
-                        )}
                         {materiasFiltradas.map((materia) => (
-                          <SelectItem key={materia.materia_id} value={materia.materia_id.toString()}>
-                            {materia.codigo_materia} - {materia.nombre_materia}
+                          <SelectItem
+                            key={materia.materia_id}
+                            value={materia.materia_id.toString()}
+                          >
+                            {materia.nombre_materia}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -388,24 +434,28 @@ const Grupos = () => {
                   </FormItem>
                 )}
               />
+
               <FormField
                 control={form.control}
                 name="periodo"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Periodo académico</FormLabel>
+                    <FormLabel>Período</FormLabel>
                     <Select
-                      onValueChange={(value) => field.onChange(parseInt(value))}
-                      value={field.value?.toString() || ""}
+                      onValueChange={(value) => field.onChange(Number(value))}
+                      value={field.value?.toString()}
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar periodo" />
+                          <SelectValue placeholder="Seleccione un período" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         {periodos.map((periodo) => (
-                          <SelectItem key={periodo.periodo_id} value={periodo.periodo_id.toString()}>
+                          <SelectItem
+                            key={periodo.periodo_id}
+                            value={periodo.periodo_id.toString()}
+                          >
                             {periodo.nombre_periodo}
                           </SelectItem>
                         ))}
@@ -415,68 +465,44 @@ const Grupos = () => {
                   </FormItem>
                 )}
               />
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="numero_estudiantes_estimado"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Estudiantes estimados</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="turno_preferente"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Turno preferente</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        value={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Seleccionar turno" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {turnos.map((turno) => (
-                            <SelectItem key={turno.value} value={turno.value}>
-                              {turno.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+
               <FormField
                 control={form.control}
-                name="docente_asignado_directamente"
+                name="numero_estudiantes_estimado"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Docente asignado (opcional)</FormLabel>
+                    <FormLabel>Número de Estudiantes</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        {...field} 
+                        onChange={(e) => field.onChange(Number(e.target.value))}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="turno_preferente"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Turno Preferente</FormLabel>
                     <Select
-                      onValueChange={(value) => field.onChange(value === "none" ? null : parseInt(value))}
-                      value={field.value?.toString() || "none"}
+                      onValueChange={field.onChange}
+                      value={field.value}
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Asignar docente" />
+                          <SelectValue placeholder="Seleccione un turno" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="none">Sin asignación directa</SelectItem>
-                        {docentes.map((docente) => (
-                          <SelectItem key={docente.docente_id} value={docente.docente_id.toString()}>
-                            {docente.nombres} {docente.apellidos} ({docente.codigo_docente})
+                        {turnos.map((turno) => (
+                          <SelectItem key={turno.value} value={turno.value}>
+                            {turno.label}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -485,22 +511,52 @@ const Grupos = () => {
                   </FormItem>
                 )}
               />
-            </div>
+
+              <FormField
+                control={form.control}
+                name="docente_asignado_directamente"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Docente Asignado</FormLabel>
+                    <Select
+                      onValueChange={(value) => field.onChange(value ? Number(value) : null)}
+                      value={field.value?.toString() || ""}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccione un docente" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="">No asignar</SelectItem>
+                        {docentes.map((docente) => (
+                          <SelectItem
+                            key={docente.docente_id}
+                            value={docente.docente_id.toString()}
+                          >
+                            {`${docente.nombres} ${docente.apellidos}`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </form>
           </Form>
         }
         onSubmit={handleSave}
-        isSubmitting={form.formState.isSubmitting}
+        isSubmitting={isSaving}
+        isValid={form.formState.isValid}
       />
 
-      {/* Confirmation dialog for deleting */}
-      <ConfirmationDialog 
+      <ConfirmationDialog
         isOpen={isDeleteDialogOpen}
         onClose={() => setIsDeleteDialogOpen(false)}
         onConfirm={confirmDelete}
         title="Eliminar Grupo"
-        description={`¿Está seguro que desea eliminar el grupo "${currentGrupo?.codigo_grupo}"? Esta acción no se puede deshacer.`}
-        confirmText="Eliminar"
-        isDangerous
+        description="¿Está seguro que desea eliminar este grupo? Esta acción no se puede deshacer."
       />
     </div>
   );
