@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import {
   Table,
@@ -56,11 +55,11 @@ const DataTable = ({ data, columns, onEdit, onDelete }: DataTableProps) => {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {paginatedData.length > 0 ? (
+          {paginatedData.length > 0 ?
             paginatedData.map((row, rowIndex) => (
-              <TableRow key={row.id || rowIndex}>
+              <TableRow key={row.grupo_id || row.id || rowIndex}>
                 {columns.map((column) => (
-                  <TableCell key={`${row.id || rowIndex}-${column.key}`}>
+                  <TableCell key={`${row.grupo_id || row.id || rowIndex}-${column.key}`}>
                     {column.render ? column.render(row) : row[column.key]}
                   </TableCell>
                 ))}
@@ -89,7 +88,7 @@ const DataTable = ({ data, columns, onEdit, onDelete }: DataTableProps) => {
                 )}
               </TableRow>
             ))
-          ) : (
+          : (
             <TableRow>
               <TableCell
                 colSpan={columns.length + (onEdit || onDelete ? 1 : 0)}

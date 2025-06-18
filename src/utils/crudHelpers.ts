@@ -1,7 +1,8 @@
-
 import { toast } from "sonner";
 import client from "@/utils/axiosClient";
 import { AxiosError } from "axios";
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 export interface PaginatedResponse<T> {
   count: number;
@@ -10,40 +11,30 @@ export interface PaginatedResponse<T> {
   results: T[];
 }
 
-export async function fetchData<T>(endpoint: string): Promise<T[] | null> {
+export const fetchData = async <T>(endpoint: string): Promise<T | null> => {
   try {
-    console.log(`Fetching data from: ${endpoint}`);
-    const response = await client.get<PaginatedResponse<T> | T[]>(endpoint);
-    console.log(`Data received from ${endpoint}:`, response.data);
-    
-    // Check if response has pagination structure
-    if (response.data && 'results' in response.data) {
-      return response.data.results;
-    }
-    
-    return response.data as T[];
+    const response = await client.get<T>(endpoint);
+    return response.data;
   } catch (error) {
-    const axiosError = error as AxiosError;
-    console.error(`Error fetching data from ${endpoint}:`, axiosError);
-    
-    if (axiosError.response) {
-      toast.error(`Error al cargar datos: ${axiosError.message || 'Error en la solicitud'}`);
-    } else if (axiosError.request) {
-      toast.error('No se recibió respuesta del servidor. Verifique su conexión.');
+    if (error instanceof AxiosError) {
+      if (error.response?.status === 404) {
+        console.error(`Endpoint no encontrado: ${endpoint}`);
+        toast.error(`No se pudo acceder a ${endpoint}`);
+      } else {
+        console.error(`Error al cargar datos de ${endpoint}:`, error);
+        toast.error(`Error al cargar datos de ${endpoint}`);
+      }
     } else {
-      toast.error(`Error inesperado: ${axiosError.message}`);
+      console.error(`Error inesperado al cargar datos de ${endpoint}:`, error);
+      toast.error(`Error inesperado al cargar datos de ${endpoint}`);
     }
-    
-    // Return empty array instead of null to prevent component crashes
-    return [];
+    return null;
   }
-}
+};
 
 export async function createItem<T>(endpoint: string, data: any): Promise<T | null> {
   try {
-    console.log(`Creating item at ${endpoint} with data:`, data);
     const response = await client.post<T>(endpoint, data);
-    console.log(`Item created successfully at ${endpoint}:`, response.data);
     toast.success("Registro creado exitosamente");
     return response.data;
   } catch (error) {

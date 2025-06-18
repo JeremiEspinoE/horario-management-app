@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { toast } from "sonner";
 import { fetchData, createItem, updateItem, deleteItem, getItemById } from "@/utils/crudHelpers";
 import DataTable from "@/components/DataTable";
 import FormModal from "@/components/FormModal";
@@ -24,44 +25,38 @@ interface ApiResponse<T> {
 }
 
 interface Carrera {
-  id: number;
+  carrera_id: number;
   nombre_carrera: string;
   codigo_carrera: string;
   unidad: number;
 }
 
 interface TipoEspacio {
-  id: number;
-  nombre: string;
+  tipo_espacio_id: number;
+  nombre_tipo_espacio: string;
 }
 
 interface Materia {
-  id: number;
+  materia_id: number;
   codigo_materia: string;
   nombre_materia: string;
-  descripcion: string;
+  descripcion: string | null;
   horas_academicas_teoricas: number;
   horas_academicas_practicas: number;
+  horas_academicas_laboratorio: number;
+  horas_totales: number;
   requiere_tipo_espacio_especifico: number | null;
+  requiere_tipo_espacio_nombre: string | null;
   estado: boolean;
-  carrera_materia: number;
+  carrera: number;
+  carrera_detalle?: {
+    carrera_id: number;
+    nombre_carrera: string;
+    codigo_carrera: string;
+    unidad: number;
+    unidad_nombre?: string;
+  };
 }
-
-// Schema for form validation
-const formSchema = z.object({
-  codigo_materia: z.string().min(1, "El código es obligatorio"),
-  nombre_materia: z.string().min(1, "El nombre es obligatorio"),
-  descripcion: z.string().optional(),
-  horas_academicas_teoricas: z.coerce.number().min(0, "No puede ser negativo"),
-  horas_academicas_practicas: z.coerce.number().min(0, "No puede ser negativo"),
-  requiere_tipo_espacio_especifico: z.union([
-    z.coerce.number().min(1),
-    z.literal("").transform(() => null),
-    z.null()
-  ]),
-  estado: z.boolean(),
-  carrera: z.number(),
-});
 
 const Materias = () => {
   const { id: carreraId } = useParams<{ id: string }>();
@@ -73,40 +68,36 @@ const Materias = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [currentMateria, setCurrentMateria] = useState<Materia | null>(null);
   const navigate = useNavigate();
-  
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      codigo_materia: "",
-      nombre_materia: "",
-      descripcion: "",
-      horas_academicas_teoricas: 0,
-      horas_academicas_practicas: 0,
-      requiere_tipo_espacio_especifico: null,
-      estado: true,
-      carrera: parseInt(carreraId || "0"),
-    },
-  });
+
+  // Validar que el ID de la carrera sea válido
+  useEffect(() => {
+    if (!carreraId || isNaN(parseInt(carreraId))) {
+      toast.error("ID de carrera inválido");
+      navigate("/admin/unidades");
+      return;
+    }
+  }, [carreraId, navigate]);
 
   // Load carrera, materias, and tipos de espacios on component mount
   useEffect(() => {
-    if (!carreraId) {
-      navigate("/admin/unidades");
+    if (!carreraId || isNaN(parseInt(carreraId))) {
       return;
     }
     
     const loadData = async () => {
+      setIsLoading(true);
+      
       try {
-        setIsLoading(true);
-        
         // Load carrera details
-        const carreraData = await fetchData<Carrera>(
-          `academic/carreras/${carreraId}/`
+        const carreraData = await getItemById<Carrera>(
+          "academic/carreras/", 
+          carreraId
         );
         
-        if (carreraData && carreraData.length > 0) {
-          setCarrera(carreraData[0]);
+        if (carreraData) {
+          setCarrera(carreraData);
         } else {
+          toast.error("No se encontró la carrera");
           navigate("/admin/unidades");
           return;
         }
@@ -130,6 +121,7 @@ const Materias = () => {
         }
       } catch (error) {
         console.error("Error loading data:", error);
+        toast.error("Error al cargar los datos");
         navigate("/admin/unidades");
       } finally {
         setIsLoading(false);
@@ -139,18 +131,47 @@ const Materias = () => {
     loadData();
   }, [carreraId, navigate]);
 
+  // Schema for form validation
+  const formSchema = z.object({
+    codigo_materia: z.string().min(1, "El código es obligatorio"),
+    nombre_materia: z.string().min(1, "El nombre es obligatorio"),
+    descripcion: z.string().optional(),
+    horas_academicas_teoricas: z.number().min(0, "Las horas teóricas no pueden ser negativas"),
+    horas_academicas_practicas: z.number().min(0, "Las horas prácticas no pueden ser negativas"),
+    horas_academicas_laboratorio: z.number().min(0, "Las horas de laboratorio no pueden ser negativas"),
+    requiere_tipo_espacio_especifico: z.number().nullable(),
+    estado: z.boolean(),
+    carrera: z.number(),
+  });
+
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      codigo_materia: "",
+      nombre_materia: "",
+      descripcion: "",
+      horas_academicas_teoricas: 0,
+      horas_academicas_practicas: 0,
+      horas_academicas_laboratorio: 0,
+      requiere_tipo_espacio_especifico: null,
+      estado: true,
+      carrera: carreraId ? parseInt(carreraId) : 0,
+    },
+  });
+
   const handleOpenModal = (materia?: Materia) => {
     if (materia) {
       setCurrentMateria(materia);
       form.reset({
         codigo_materia: materia.codigo_materia,
         nombre_materia: materia.nombre_materia,
-        descripcion: materia.descripcion,
+        descripcion: materia.descripcion || "",
         horas_academicas_teoricas: materia.horas_academicas_teoricas,
         horas_academicas_practicas: materia.horas_academicas_practicas,
+        horas_academicas_laboratorio: materia.horas_academicas_laboratorio,
         requiere_tipo_espacio_especifico: materia.requiere_tipo_espacio_especifico,
         estado: materia.estado,
-        carrera: materia.carrera_materia,
+        carrera: carreraId ? parseInt(carreraId) : undefined,
       });
     } else {
       setCurrentMateria(null);
@@ -160,9 +181,10 @@ const Materias = () => {
         descripcion: "",
         horas_academicas_teoricas: 0,
         horas_academicas_practicas: 0,
+        horas_academicas_laboratorio: 0,
         requiere_tipo_espacio_especifico: null,
         estado: true,
-        carrera: parseInt(carreraId || "0"),
+        carrera: carreraId ? parseInt(carreraId) : undefined,
       });
     }
     setIsModalOpen(true);
@@ -179,29 +201,36 @@ const Materias = () => {
 
     const values = form.getValues();
     
-    if (currentMateria) {
-      // Update existing materia
-      const updated = await updateItem<Materia>(
-        "academic/materias/", 
-        currentMateria.id, 
-        values
-      );
-      
-      if (updated) {
-        setMaterias(materias.map(m => m.id === currentMateria.id ? updated : m));
-        handleCloseModal();
+    try {
+      if (currentMateria) {
+        // Update existing materia
+        const updated = await updateItem<Materia>(
+          "academic/materias/", 
+          currentMateria.materia_id, 
+          values
+        );
+        
+        if (updated) {
+          setMaterias(materias.map(m => m.materia_id === currentMateria.materia_id ? updated : m));
+          toast.success("Materia actualizada exitosamente");
+          handleCloseModal();
+        }
+      } else {
+        // Create new materia
+        const created = await createItem<Materia>(
+          "academic/materias/", 
+          values
+        );
+        
+        if (created) {
+          setMaterias([...materias, created]);
+          toast.success("Materia creada exitosamente");
+          handleCloseModal();
+        }
       }
-    } else {
-      // Create new materia
-      const created = await createItem<Materia>(
-        "academic/materias/", 
-        values
-      );
-      
-      if (created) {
-        setMaterias([...materias, created]);
-        handleCloseModal();
-      }
+    } catch (error) {
+      console.error("Error saving materia:", error);
+      toast.error("Error al guardar la materia");
     }
   };
 
@@ -213,10 +242,10 @@ const Materias = () => {
   const confirmDelete = async () => {
     if (!currentMateria) return;
     
-    const success = await deleteItem("academic/materias/", currentMateria.id);
+    const success = await deleteItem("academic/materias/", currentMateria.materia_id);
     
     if (success) {
-      setMaterias(materias.filter(m => m.id !== currentMateria.id));
+      setMaterias(materias.filter(m => m.materia_id !== currentMateria.materia_id));
       setIsDeleteDialogOpen(false);
       setCurrentMateria(null);
     }
@@ -227,11 +256,11 @@ const Materias = () => {
     { key: "nombre_materia", header: "Nombre" },
     { 
       key: "horas", 
-      header: "Horas (T/P/Total)", 
+      header: "Horas (T/P/L/Total)", 
       render: (row: Materia) => (
         <span>
-          {row.horas_academicas_teoricas}/{row.horas_academicas_practicas}/
-          {row.horas_academicas_teoricas + row.horas_academicas_practicas}
+          {row.horas_academicas_teoricas}/{row.horas_academicas_practicas}/{row.horas_academicas_laboratorio}/
+          {row.horas_totales}
         </span>
       )
     },
@@ -240,8 +269,8 @@ const Materias = () => {
       header: "Tipo Espacio", 
       render: (row: Materia) => {
         if (!row.requiere_tipo_espacio_especifico) return "No específico";
-        const tipoEspacio = tiposEspacios.find(t => t.id === row.requiere_tipo_espacio_especifico);
-        return tipoEspacio ? tipoEspacio.nombre : "Desconocido";
+        const tipoEspacio = tiposEspacios.find(t => t.tipo_espacio_id === row.requiere_tipo_espacio_especifico);
+        return tipoEspacio ? tipoEspacio.nombre_tipo_espacio : "Desconocido";
       }
     },
     { 
@@ -260,7 +289,7 @@ const Materias = () => {
       <div className="mb-6">
         <Button 
           variant="outline" 
-          onClick={() => navigate(`/admin/unidades/${carrera?.unidad}/carreras`)}
+          onClick={() => navigate(`/admin/carreras/${carreraId}`)}
           className="mb-4"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
@@ -269,7 +298,7 @@ const Materias = () => {
         
         <PageHeader 
           title={`Materias: ${carrera?.nombre_carrera || 'Cargando...'}`}
-          description="Administración de materias para esta carrera"
+          description={`Administración de materias para la carrera ${carrera?.codigo_carrera || ''}`}
           onAdd={() => handleOpenModal()}
         />
       </div>
@@ -292,6 +321,9 @@ const Materias = () => {
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         title={currentMateria ? "Editar Materia" : "Crear Materia"}
+        onSubmit={handleSave}
+        isSubmitting={form.formState.isSubmitting}
+        isValid={form.formState.isValid}
         form={
           <Form {...form}>
             <div className="space-y-4">
@@ -334,15 +366,21 @@ const Materias = () => {
                   </FormItem>
                 )}
               />
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <FormField
                   control={form.control}
                   name="horas_academicas_teoricas"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Horas teóricas</FormLabel>
+                      <FormLabel>Horas Teóricas</FormLabel>
                       <FormControl>
-                        <Input type="number" {...field} />
+                        <Input 
+                          type="number" 
+                          min="0"
+                          placeholder="0" 
+                          {...field} 
+                          onChange={e => field.onChange(parseInt(e.target.value) || 0)}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -353,9 +391,34 @@ const Materias = () => {
                   name="horas_academicas_practicas"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Horas prácticas</FormLabel>
+                      <FormLabel>Horas Prácticas</FormLabel>
                       <FormControl>
-                        <Input type="number" {...field} />
+                        <Input 
+                          type="number" 
+                          min="0"
+                          placeholder="0" 
+                          {...field} 
+                          onChange={e => field.onChange(parseInt(e.target.value) || 0)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="horas_academicas_laboratorio"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Horas Laboratorio</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          min="0"
+                          placeholder="0" 
+                          {...field} 
+                          onChange={e => field.onChange(parseInt(e.target.value) || 0)}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -366,40 +429,59 @@ const Materias = () => {
                 control={form.control}
                 name="requiere_tipo_espacio_especifico"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Tipo de espacio requerido</FormLabel>
-                    <Select
-                      onValueChange={(value) => field.onChange(value ? parseInt(value) : null)}
-                      value={field.value?.toString() || ""}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar tipo de espacio" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="">No específico</SelectItem>
-                        {tiposEspacios.map((tipo) => (
-                          <SelectItem key={tipo.id} value={tipo.id.toString()}>
-                            {tipo.nombre}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">
+                        Requiere tipo de espacio específico
+                      </FormLabel>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value !== null}
+                        onCheckedChange={(value) => field.onChange(value ? 1 : null)}
+                      />
+                    </FormControl>
                   </FormItem>
                 )}
               />
+              {form.watch("requiere_tipo_espacio_especifico") !== null && (
+                <FormField
+                  control={form.control}
+                  name="requiere_tipo_espacio_especifico"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tipo de Espacio</FormLabel>
+                      <Select
+                        onValueChange={(value) => field.onChange(value ? parseInt(value) : null)}
+                        value={field.value?.toString()}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar tipo de espacio" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {tiposEspacios.map((tipo) => (
+                            <SelectItem key={tipo.tipo_espacio_id} value={tipo.tipo_espacio_id.toString()}>
+                              {tipo.nombre_tipo_espacio}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
               <FormField
                 control={form.control}
                 name="estado"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                     <div className="space-y-0.5">
-                      <FormLabel>Estado</FormLabel>
-                      <div className="text-sm text-muted-foreground">
-                        Materia activa para asignación
-                      </div>
+                      <FormLabel className="text-base">
+                        Estado
+                      </FormLabel>
                     </div>
                     <FormControl>
                       <Switch
@@ -410,22 +492,9 @@ const Materias = () => {
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="carrera"
-                render={({ field }) => (
-                  <FormItem className="hidden">
-                    <FormControl>
-                      <Input type="hidden" {...field} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
             </div>
           </Form>
         }
-        onSubmit={handleSave}
-        isSubmitting={form.formState.isSubmitting}
       />
 
       {/* Confirmation dialog for deleting */}
