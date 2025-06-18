@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -11,6 +10,13 @@ import PageHeader from "@/components/PageHeader";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+interface ApiResponse<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
 
 interface UnidadAcademica {
   unidad_id: number;
@@ -83,48 +89,54 @@ const Docentes = () => {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      usuario: undefined,
       codigo_docente: "",
       nombres: "",
       apellidos: "",
       dni: "",
       email: "",
       telefono: "",
-      tipo_contrato: "",
+      tipo_contrato: "TC",
       max_horas_semanales: 40,
-      unidad_principal: 0,
-      especialidades_detalle:[],
+      unidad_principal: undefined,
+      especialidades_detalle: [],
     },
   });
 
   // Load data on component mount
   useEffect(() => {
     const loadData = async () => {
-      setIsLoading(true);
+      try {
+        setIsLoading(true);
+        
+        // Load docentes
+        const docentesData = await fetchData<ApiResponse<Docente>>("users/docentes/");
+        if (docentesData?.results) {
+          setDocentes(docentesData.results);
+        }
       
-      // Load docentes
-      const docentesData = await fetchData<Docente>("users/docentes/");
-      if (docentesData) {
-        setDocentes(docentesData);
+        // Load unidades
+        const unidadesData = await fetchData<ApiResponse<UnidadAcademica>>("academic/unidades-academicas/");
+        if (unidadesData?.results) {
+          setUnidades(unidadesData.results);
+        }     
+        
+        // Load usuarios (para vincular)
+        const usuariosData = await fetchData<ApiResponse<Usuario>>("users/all/");
+        if (usuariosData?.results) {
+          setUsuarios(usuariosData.results);
+        }
+        
+        // Load especialidades
+        const especialidadesData = await fetchData<ApiResponse<Especialidad>>("academic/especialidades/");
+        if (especialidadesData?.results) {
+          setEspecialidades(especialidadesData.results);
+        }
+      } catch (error) {
+        console.error("Error loading data:", error);
+      } finally {
+        setIsLoading(false);
       }
-    
-      // Load unidades
-      const unidadesData = await fetchData<UnidadAcademica>("academic/unidades-academicas/");
-        if (unidadesData) {
-        setUnidades(unidadesData);  // unidadesData ya es UnidadAcademica[]
-      }     
-      // Load usuarios (para vincular)
-      const usuariosData = await fetchData<Usuario>("users/all/");
-      if (usuariosData) {
-        setUsuarios(usuariosData);
-      }
-      
-      // Load especialidades
-      const especialidadesData = await fetchData<Especialidad>("academic/especialidades/");
-      if (especialidadesData) {
-        setEspecialidades(especialidadesData);
-      }
-      
-      setIsLoading(false);
     };
     
     loadData();
@@ -134,30 +146,31 @@ const Docentes = () => {
     if (docente) {
       setCurrentDocente(docente);
       form.reset({
-        usuario: docente.usuario,
+        usuario: docente.usuario || undefined,
         codigo_docente: docente.codigo_docente,
         nombres: docente.nombres,
         apellidos: docente.apellidos,
         dni: docente.dni,
         email: docente.email,
-        telefono: docente.telefono,
-        tipo_contrato: docente.tipo_contrato,
+        telefono: docente.telefono || "",
+        tipo_contrato: docente.tipo_contrato || "TC",
         max_horas_semanales: docente.max_horas_semanales,
-        unidad_principal: docente.unidad_principal,
-        especialidades_detalle: docente.especialidades_detalle,
+        unidad_principal: docente.unidad_principal || undefined,
+        especialidades_detalle: docente.especialidades_detalle || [],
       });
     } else {
       setCurrentDocente(null);
       form.reset({
+        usuario: undefined,
         codigo_docente: "",
         nombres: "",
         apellidos: "",
         dni: "",
         email: "",
         telefono: "",
-        tipo_contrato: "",
+        tipo_contrato: "TC",
         max_horas_semanales: 40,
-        unidad_principal: 0,
+        unidad_principal: undefined,
         especialidades_detalle: [],
       });
     }
@@ -286,8 +299,8 @@ const Docentes = () => {
                     <FormItem>
                       <FormLabel>Usuario del sistema (opcional)</FormLabel>
                       <Select
-                        onValueChange={(value) => field.onChange(parseInt(value))}
-                        value={field.value?.toString() || ""}
+                        onValueChange={(value) => field.onChange(value ? parseInt(value) : undefined)}
+                        value={field.value?.toString() || undefined}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -295,7 +308,6 @@ const Docentes = () => {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="">Sin usuario asignado</SelectItem>
                           {usuarios.map((usuario) => (
                             <SelectItem key={usuario.id} value={usuario.id.toString()}>
                               {usuario.username} ({usuario.first_name} {usuario.last_name})
@@ -399,7 +411,7 @@ const Docentes = () => {
                       <FormLabel>Tipo de contrato</FormLabel>
                       <Select
                         onValueChange={field.onChange}
-                        defaultValue={field.value}
+                        value={field.value || "TC"}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -407,12 +419,11 @@ const Docentes = () => {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                             {tiposContrato.filter((tipo) => tipo.value.trim() !== "") // evita vacíos
-                              .map((tipo) => (
-                        <SelectItem key={tipo.value} value={tipo.value}>
-                          {tipo.label}
-                      </SelectItem>
-                        ))}
+                          {tiposContrato.map((tipo) => (
+                            <SelectItem key={tipo.value} value={tipo.value}>
+                              {tipo.label}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -441,7 +452,7 @@ const Docentes = () => {
                     <FormLabel>Unidad académica principal</FormLabel>
                     <Select
                       onValueChange={(value) => field.onChange(parseInt(value))}
-                      value={field.value?.toString() || ""}
+                      value={field.value?.toString() || undefined}
                     >
                       <FormControl>
                         <SelectTrigger>

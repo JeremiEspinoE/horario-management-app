@@ -123,13 +123,23 @@ const Grupos = () => {
   
   // Update materias when carrera changes
   useEffect(() => {
-    if (carreraId) {
-      const filteredMaterias = materias.filter(m => m.carrera === carreraId);
-      setMateriasFiltradas(filteredMaterias);
-    } else {
-      setMateriasFiltradas([]);
-    }
-  }, [carreraId, materias]);
+    const fetchMateriasPorCarrera = async () => {
+      if (carreraId) {
+        setIsLoading(true);
+        try {
+          const materiasData = await fetchData<Materia>(`academic/materias/?carrera=${carreraId}`);
+          setMateriasFiltradas(materiasData);
+        } catch (error) {
+          setMateriasFiltradas([]);
+        } finally {
+          setIsLoading(false);
+        }
+      } else {
+        setMateriasFiltradas([]);
+      }
+    };
+    fetchMateriasPorCarrera();
+  }, [carreraId]);
 
   // Load data on component mount
   useEffect(() => {
@@ -139,26 +149,14 @@ const Grupos = () => {
       try {
         // Load grupos
         const gruposData = await fetchData<Grupo>("scheduling/grupos/");
-        
         // Load carreras
-        const carrerasResponseArr = await fetchData<{ results: Carrera[] }>("academic/carreras/");
-        const carrerasResponse = Array.isArray(carrerasResponseArr) ? carrerasResponseArr[0] : carrerasResponseArr;
-        const carrerasData = carrerasResponse?.results || [];
-        
+        const carrerasData = await fetchData<Carrera>("academic/carreras/");
         // Load materias
-        const materiasResponseArr = await fetchData<{ results: Materia[] }>("academic/materias/");
-        const materiasResponse = Array.isArray(materiasResponseArr) ? materiasResponseArr[0] : materiasResponseArr;
-        const materiasData = materiasResponse?.results || [];
-        
+        const materiasData = await fetchData<Materia>("academic/materias/");
         // Load periodos
-        const periodosResponseArr = await fetchData<{ results: Periodo[] }>("academic/periodos-academicos/");
-        const periodosResponse = Array.isArray(periodosResponseArr) ? periodosResponseArr[0] : periodosResponseArr;
-        const periodosData = periodosResponse?.results || [];
-        
+        const periodosData = await fetchData<Periodo>("academic/periodos-academicos/");
         // Load docentes
-        const docentesResponseArr = await fetchData<{ results: Docente[] }>("users/docentes/");
-        const docentesResponse = Array.isArray(docentesResponseArr) ? docentesResponseArr[0] : docentesResponseArr;
-        const docentesData = docentesResponse?.results || [];
+        const docentesData = await fetchData<Docente>("users/docentes/");
         
         setGrupos(gruposData);
         setCarreras(carrerasData);

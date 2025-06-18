@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
@@ -26,6 +25,13 @@ interface Carrera {
   codigo_carrera: string;
   horas_totales_curricula: number;
   unidad: number;
+}
+
+interface ApiResponse<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
 }
 
 // Schema for form validation

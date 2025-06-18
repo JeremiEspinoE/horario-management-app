@@ -16,11 +16,18 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft } from "lucide-react";
 
+interface ApiResponse<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
 interface Carrera {
   id: number;
   nombre_carrera: string;
   codigo_carrera: string;
-  unidad: number; // Added missing property
+  unidad: number;
 }
 
 interface TipoEspacio {
@@ -37,7 +44,7 @@ interface Materia {
   horas_academicas_practicas: number;
   requiere_tipo_espacio_especifico: number | null;
   estado: boolean;
-  carrera: number;
+  carrera_materia: number;
 }
 
 // Schema for form validation
@@ -89,40 +96,44 @@ const Materias = () => {
     }
     
     const loadData = async () => {
-      setIsLoading(true);
-      
-      // Load carrera details
-      const carreraData = await getItemById<Carrera>(
-        "academic/carreras/", 
-        carreraId
-      );
-      
-      if (carreraData) {
-        setCarrera(carreraData);
-      } else {
+      try {
+        setIsLoading(true);
+        
+        // Load carrera details
+        const carreraData = await fetchData<Carrera>(
+          `academic/carreras/${carreraId}/`
+        );
+        
+        if (carreraData && carreraData.length > 0) {
+          setCarrera(carreraData[0]);
+        } else {
+          navigate("/admin/unidades");
+          return;
+        }
+        
+        // Load materias for this carrera
+        const materiasData = await fetchData<Materia>(
+          `academic/materias/?carrera=${carreraId}`
+        );
+        
+        if (materiasData) {
+          setMaterias(materiasData);
+        }
+        
+        // Load tipos de espacios
+        const tiposEspaciosData = await fetchData<TipoEspacio>(
+          "academic/tipos-espacio/"
+        );
+        
+        if (tiposEspaciosData) {
+          setTiposEspacios(tiposEspaciosData);
+        }
+      } catch (error) {
+        console.error("Error loading data:", error);
         navigate("/admin/unidades");
-        return;
+      } finally {
+        setIsLoading(false);
       }
-      
-      // Load materias for this carrera
-      const materiasData = await fetchData<Materia>(
-        `academic/materias/?carrera=${carreraId}`
-      );
-      
-      if (materiasData) {
-        setMaterias(materiasData);
-      }
-      
-      // Load tipos de espacios
-      const tiposEspaciosData = await fetchData<TipoEspacio>(
-        "academic/tipos-espacio/"
-      );
-      
-      if (tiposEspaciosData) {
-        setTiposEspacios(tiposEspaciosData);
-      }
-      
-      setIsLoading(false);
     };
     
     loadData();
@@ -139,7 +150,7 @@ const Materias = () => {
         horas_academicas_practicas: materia.horas_academicas_practicas,
         requiere_tipo_espacio_especifico: materia.requiere_tipo_espacio_especifico,
         estado: materia.estado,
-        carrera: materia.carrera,
+        carrera: materia.carrera_materia,
       });
     } else {
       setCurrentMateria(null);
