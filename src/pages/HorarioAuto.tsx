@@ -65,7 +65,7 @@ const HorarioAuto = () => {
     const loadPeriodos = async () => {
       setIsLoading(true);
       try {
-        const periodosData = await fetchData<Periodo>("academic/periodos-academicos/?activo=true");
+        const periodosData = await fetchData<Periodo>("academic-setup/periodos-academicos/?activo=true");
         if (periodosData && periodosData.length > 0) {
           setPeriodos(periodosData);
           setSelectedPeriodo(periodosData[0].periodo_id);

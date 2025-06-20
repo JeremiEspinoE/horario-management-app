@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import client from "@/utils/axiosClient";
@@ -21,6 +20,7 @@ import {
 } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Periodo {
   id: number;
@@ -113,6 +113,7 @@ const stringToColor = (str: string) => {
 };
 
 const ReportesHorarios = () => {
+  const { user, role } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [activeTab, setActiveTab] = useState("grupo");
@@ -142,24 +143,21 @@ const ReportesHorarios = () => {
       setIsLoading(true);
       
       try {
-        // Load active academic periods
-        const periodosData = await fetchData<Periodo>("academic/periodos-academicos/?activo=true");
-        if (periodosData && periodosData.length > 0) {
+        // Load active academic periods (respuesta paginada)
+        const periodosResponse = await fetchData<{ results: Periodo[] }>("academic-setup/periodos-academicos/?activo=true");
+        const periodosData = periodosResponse?.results ?? [];
+        if (periodosData.length > 0) {
           setPeriodos(periodosData);
           setSelectedPeriodo(periodosData[0].id);
         }
-        
-        // Load time blocks
-        const bloquesData = await fetchData<BloqueHorario>("scheduling/bloques-horarios/");
-        if (bloquesData) {
-          setBloques(bloquesData.sort((a, b) => a.orden - b.orden));
-        }
-        
-        // Load academic units
-        const unidadesData = await fetchData<UnidadAcademica>("academic/unidades-academicas/");
-        if (unidadesData) {
-          setUnidades(unidadesData);
-        }
+        // Load time blocks (respuesta paginada)
+        const bloquesResponse = await fetchData<{ results: BloqueHorario[] }>("scheduling/bloques-horarios/");
+        const bloquesData = bloquesResponse?.results ?? [];
+        setBloques(bloquesData.sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)));
+        // Load academic units (respuesta paginada)
+        const unidadesResponse = await fetchData<{ results: UnidadAcademica[] }>("academic-setup/unidades-academicas/");
+        const unidadesData = unidadesResponse?.results ?? [];
+        setUnidades(unidadesData);
       } catch (error) {
         console.error("Error loading initial data:", error);
         toast.error("Error al cargar los datos iniciales");
@@ -176,23 +174,18 @@ const ReportesHorarios = () => {
     if (selectedUnidad) {
       const loadCarreras = async () => {
         try {
-          const carrerasData = await fetchData<Carrera>(`academic/carreras/?unidad=${selectedUnidad}`);
-          if (carrerasData) {
-            setCarreras(carrerasData);
-          }
-          
-          // Load aulas for this unidad
-          const aulasData = await fetchData<Aula>(`academic/espacios-fisicos/?unidad=${selectedUnidad}`);
-          if (aulasData) {
-            setAulas(aulasData);
-          }
-          
-          // Load docentes for this unidad
-          const docentesData = await fetchData<Docente>(`users/docentes/?unidad_principal=${selectedUnidad}`);
-          if (docentesData) {
-            setDocentes(docentesData);
-          }
-          
+          // Load carreras (respuesta paginada)
+          const carrerasResponse = await fetchData<{ results: Carrera[] }>(`academic-setup/carreras/?unidad=${selectedUnidad}`);
+          const carrerasData = carrerasResponse?.results ?? [];
+          setCarreras(Array.isArray(carrerasData) ? carrerasData : []);
+          // Load aulas for this unidad (respuesta paginada)
+          const aulasResponse = await fetchData<{ results: Aula[] }>(`academic-setup/espacios-fisicos/?unidad=${selectedUnidad}`);
+          const aulasData = aulasResponse?.results ?? [];
+          setAulas(Array.isArray(aulasData) ? aulasData : []);
+          // Load docentes for this unidad (respuesta paginada)
+          const docentesResponse = await fetchData<{ results: Docente[] }>(`users/docentes/?unidad_principal=${selectedUnidad}`);
+          const docentesData = docentesResponse?.results ?? [];
+          setDocentes(Array.isArray(docentesData) ? docentesData : []);
           setSelectedCarrera(null);
           setSelectedGrupo(null);
           setSelectedAula(null);
@@ -202,7 +195,6 @@ const ReportesHorarios = () => {
           toast.error("Error al cargar las carreras");
         }
       };
-      
       loadCarreras();
     }
   }, [selectedUnidad]);
@@ -212,24 +204,20 @@ const ReportesHorarios = () => {
     if (selectedCarrera && selectedPeriodo) {
       const loadGrupos = async () => {
         try {
-          const gruposData = await fetchData<Grupo>(`scheduling/grupos/?carrera=${selectedCarrera}&periodo=${selectedPeriodo}`);
-          if (gruposData) {
-            setGrupos(gruposData);
-          }
-          
-          // Load materias for this carrera
-          const materiasData = await fetchData<Materia>(`academic/materias/?carrera=${selectedCarrera}`);
-          if (materiasData) {
-            setMaterias(materiasData);
-          }
-          
+          // Load grupos (respuesta paginada)
+          const gruposResponse = await fetchData<{ results: Grupo[] }>(`scheduling/grupos/?carrera=${selectedCarrera}&periodo=${selectedPeriodo}`);
+          const gruposData = gruposResponse?.results ?? [];
+          setGrupos(Array.isArray(gruposData) ? gruposData : []);
+          // Load materias for this carrera (respuesta paginada)
+          const materiasResponse = await fetchData<{ results: Materia[] }>(`academic-setup/materias/?carrera=${selectedCarrera}`);
+          const materiasData = materiasResponse?.results ?? [];
+          setMaterias(Array.isArray(materiasData) ? materiasData : []);
           setSelectedGrupo(null);
         } catch (error) {
           console.error("Error loading grupos:", error);
           toast.error("Error al cargar los grupos");
         }
       };
-      
       loadGrupos();
     }
   }, [selectedCarrera, selectedPeriodo]);
@@ -241,54 +229,55 @@ const ReportesHorarios = () => {
     }
   }, [selectedPeriodo, selectedGrupo, selectedDocente, selectedAula]);
   
+  // Selección automática para docentes
+  useEffect(() => {
+    if (String(role).toLowerCase() === 'docente' && user && user.docente_id) {
+      console.log('Seleccionando docente:', user.docente_id);
+      setSelectedDocente(user.docente_id);
+      setActiveTab('docente');
+    }
+  }, [role, user]);
+  
   const loadHorarios = async () => {
     setIsLoading(true);
-    
     let endpoint = `scheduling/horarios-asignados/?periodo=${selectedPeriodo}`;
-    
     if (selectedGrupo) {
       endpoint += `&grupo=${selectedGrupo}`;
     } else if (selectedCarrera) {
       endpoint += `&carrera=${selectedCarrera}`;
     }
-    
     if (selectedDocente) {
       endpoint += `&docente=${selectedDocente}`;
     }
-    
     if (selectedAula) {
       endpoint += `&espacio=${selectedAula}`;
     }
-    
     try {
-      const horariosData = await fetchData<HorarioAsignado>(endpoint);
-      setHorarios(horariosData || []);
-      
+      // Load horarios (respuesta paginada)
+      const horariosResponse = await fetchData<{ results: HorarioAsignado[] }>(endpoint);
+      const horariosData = horariosResponse?.results ?? [];
+      setHorarios(Array.isArray(horariosData) ? horariosData : []);
       // Process horarios to display format
       if (horariosData) {
         const celdas: HorarioCelda[] = [];
-        
         for (const horario of horariosData) {
           const grupo = grupos.find(g => g.id === horario.grupo);
           const materia = grupo ? materias.find(m => m.id === grupo.materia) : null;
           const docente = docentes.find(d => d.id === horario.docente);
           const aula = aulas.find(a => a.id === horario.espacio);
-          
           if (materia) {
             const color = stringToColor(materia.nombre_materia);
-            
             celdas.push({
               bloqueId: horario.bloque_horario,
               diaId: horario.dia_semana,
-              materia: materia?.nombre_materia || 'Desconocida',
-              docente: docente ? `${docente.nombres} ${docente.apellidos}` : 'Desconocido',
-              aula: aula?.nombre_espacio || 'Desconocida',
-              grupo: grupo?.codigo_grupo || 'Desconocido',
+              materia: materia.nombre_materia,
+              docente: docente ? `${docente.nombres} ${docente.apellidos}` : '',
+              aula: aula ? aula.nombre_espacio : '',
+              grupo: grupo ? grupo.codigo_grupo : '',
               color
             });
           }
         }
-        
         setHorariosCeldas(celdas);
       }
     } catch (error) {
@@ -324,6 +313,10 @@ const ReportesHorarios = () => {
     }
     
     try {
+      // Asegurarse que endpoint no tenga slash inicial
+      if (endpoint.startsWith('/')) {
+        endpoint = endpoint.slice(1);
+      }
       const response = await client.get(endpoint, { responseType: 'blob' });
       
       // Create download link
@@ -373,6 +366,9 @@ const ReportesHorarios = () => {
   const getHorarioPorDiaBloque = (diaId: number, bloqueId: number): HorarioCelda | null => {
     return horariosCeldas.find(h => h.diaId === diaId && h.bloqueId === bloqueId) || null;
   };
+  
+  // Log para depuración de docentes y selección
+  console.log('Docentes disponibles:', docentes, 'ID seleccionado:', selectedDocente);
   
   return (
     <div className="container mx-auto py-6">
@@ -533,7 +529,7 @@ const ReportesHorarios = () => {
                     setSelectedGrupo(null);
                     setSelectedAula(null);
                   }}
-                  disabled={!selectedUnidad}
+                  disabled={String(role).toLowerCase() === 'docente' || !selectedUnidad}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar docente" />

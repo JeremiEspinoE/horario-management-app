@@ -50,6 +50,15 @@ const diasSemana = [
   { id: 6, nombre: "Sábado" }
 ];
 
+// Tipo auxiliar para errores de Axios
+type AxiosError = {
+  response?: {
+    data?: {
+      non_field_errors?: string[];
+    };
+  };
+};
+
 const DisponibilidadDocente = () => {
   const { role, user } = useAuth();
   const isAdmin = role === "Administrador";
@@ -75,45 +84,52 @@ const DisponibilidadDocente = () => {
       try {
         console.log("Loading initial data for DisponibilidadDocente");
         
-        // Cargar periodos académicos activos
-        const periodosData = await fetchData<Periodo>("academic/periodos-academicos/?activo=true");
+        // Cargar periodos académicos activos (respuesta paginada)
+        const periodosResponse = await fetchData<{ results: Periodo[] }>("academic-setup/periodos-academicos/?activo=true");
+        const periodosData = periodosResponse?.results ?? [];
         console.log("Periodos loaded:", periodosData);
         
-        if (periodosData && periodosData.length > 0) {
+        if (periodosData.length > 0) {
           setPeriodos(periodosData);
           setSelectedPeriodo(periodosData[0].periodo_id);
         } else {
           console.log("No periodos found or empty array returned");
           setPeriodos([]);
+          setSelectedPeriodo(null);
         }
         
-        // Cargar bloques horarios
-        const bloquesData = await fetchData<BloqueHorario>("scheduling/bloques-horarios/");
+        // Cargar bloques horarios (respuesta paginada)
+        const bloquesResponse = await fetchData<{ results: BloqueHorario[] }>("scheduling/bloques-horarios/");
+        const bloquesData = bloquesResponse?.results ?? [];
         console.log("Bloques loaded:", bloquesData);
         
-        if (bloquesData && bloquesData.length > 0) {
-          setBloques(bloquesData.sort((a, b) => a.orden - b.orden));
+        if (bloquesData.length > 0) {
+          setBloques(bloquesData.sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)));
         } else {
           console.log("No bloques found or empty array returned");
           setBloques([]);
         }
         
-        // Si es administrador, cargar docentes
+        // Si es administrador, cargar docentes (respuesta paginada)
         if (isAdmin) {
-          const docentesData = await fetchData<Docente>("users/docentes/");
+          const docentesResponse = await fetchData<{ results: Docente[] }>("users/docentes/");
+          const docentesData = docentesResponse?.results ?? [];
           console.log("Docentes loaded:", docentesData);
           
-          if (docentesData && docentesData.length > 0) {
+          if (docentesData.length > 0) {
             setDocentes(docentesData);
             setSelectedDocente(docentesData[0].docente_id);
           } else {
             console.log("No docentes found or empty array returned");
             setDocentes([]);
+            setSelectedDocente(null);
           }
         } else if (user && user.docente_id) {
           // Si es docente, usar su propio ID
           console.log("Setting docente ID for non-admin user:", user.docente_id);
           setSelectedDocente(user.docente_id);
+        } else {
+          setSelectedDocente(null);
         }
       } catch (error) {
         console.error("Error cargando datos iniciales:", error);
@@ -202,10 +218,11 @@ const DisponibilidadDocente = () => {
       }
       
       toast.success("Disponibilidad actualizada");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error actualizando disponibilidad:", error);
-      if (error.response?.data?.non_field_errors) {
-        toast.error(error.response.data.non_field_errors[0]);
+      const axiosError = error as AxiosError;
+      if (axiosError.response?.data?.non_field_errors) {
+        toast.error(axiosError.response.data.non_field_errors[0]);
       } else {
         toast.error("Error al actualizar la disponibilidad");
       }
@@ -296,6 +313,9 @@ const DisponibilidadDocente = () => {
     );
   }
 
+  // Antes del return principal, agregar log para depuración
+  console.log("Periodos en render:", periodos);
+
   return (
     <div className="container mx-auto py-6">
       <PageHeader 
@@ -333,6 +353,7 @@ const DisponibilidadDocente = () => {
                 <Select 
                   onValueChange={(value) => setSelectedPeriodo(Number(value))}
                   value={selectedPeriodo?.toString() || ""}
+                  disabled={periodos.length === 0}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar periodo" />

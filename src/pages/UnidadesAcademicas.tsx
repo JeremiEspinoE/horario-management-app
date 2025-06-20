@@ -49,9 +49,9 @@ const UnidadesAcademicas = () => {
 
   const loadUnidades = async () => {
     setIsLoading(true);
-    const data = await fetchData<UnidadAcademica>("academic/unidades-academicas/");
-    if (data) {
-      setUnidades(data);
+    const data = await fetchData<{ count: number; next: string | null; previous: string | null; results: UnidadAcademica[] }>("academic-setup/unidades-academicas/");
+    if (data && Array.isArray(data.results)) {
+      setUnidades(data.results);
     }
     setIsLoading(false);
   };
@@ -91,7 +91,7 @@ const UnidadesAcademicas = () => {
     }
     // Update existing unidad
     const updated = await updateItem<UnidadAcademica>(
-      "academic/unidades-academicas/",
+      "academic-setup/unidades-academicas/",
       currentUnidad.unidad_id,
       values
     );
@@ -103,7 +103,7 @@ const UnidadesAcademicas = () => {
   } else {
     // Create new unidad
     const created = await createItem<UnidadAcademica>(
-      "academic/unidades-academicas/",
+      "academic-setup/unidades-academicas/",
       values
     );
 
@@ -121,7 +121,7 @@ const UnidadesAcademicas = () => {
   const confirmDelete = async () => {
     if (!currentUnidad) return;
     
-    const success = await deleteItem("academic/unidades-academicas/", currentUnidad.unidad_id);
+    const success = await deleteItem("academic-setup/unidades-academicas/", currentUnidad.unidad_id);
     
     if (success) {
       setUnidades(unidades.filter(u => u.unidad_id !== currentUnidad.unidad_id));

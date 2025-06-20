@@ -75,7 +75,7 @@ const Carreras = () => {
       
       // Load unidad details
       const unidadData = await getItemById<UnidadAcademica>(
-        "academic/unidades-academicas/", 
+        "academic-setup/unidades-academicas/", 
         unidadId
       );
       
@@ -87,12 +87,12 @@ const Carreras = () => {
       }
       
       // Load carreras for this unidad
-      const carrerasData = await fetchData<Carrera>(
-        `academic/carreras/?unidad=${unidadId}`
+      const carrerasData = await fetchData<{ count: number; next: string | null; previous: string | null; results: Carrera[] }>(
+        `academic-setup/carreras/?unidad=${unidadId}`
       );
       
-      if (carrerasData) {
-        setCarreras(carrerasData);
+      if (carrerasData && Array.isArray(carrerasData.results)) {
+        setCarreras(carrerasData.results);
       }
       
       setIsLoading(false);
@@ -136,7 +136,7 @@ const Carreras = () => {
     if (currentCarrera) {
       // Update existing carrera
       const updated = await updateItem<Carrera>(
-        "academic/carreras/", 
+        "academic-setup/carreras/", 
         currentCarrera.carrera_id, 
         values
       );
@@ -148,7 +148,7 @@ const Carreras = () => {
     } else {
       // Create new carrera
       const created = await createItem<Carrera>(
-        "academic/carreras/", 
+        "academic-setup/carreras/", 
         values
       );
       
@@ -167,7 +167,7 @@ const Carreras = () => {
   const confirmDelete = async () => {
     if (!currentCarrera) return;
     
-    const success = await deleteItem("academic/carreras/", currentCarrera.carrera_id);
+    const success = await deleteItem("academic-setup/carreras/", currentCarrera.carrera_id);
     
     if (success) {
       setCarreras(carreras.filter(c => c.carrera_id !== currentCarrera.carrera_id));

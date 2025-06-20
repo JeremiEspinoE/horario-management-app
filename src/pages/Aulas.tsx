@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -70,21 +69,25 @@ const Aulas = () => {
       setIsLoading(true);
       
       // Load aulas
-      const aulasData = await fetchData<Aula>("academic/espacios-fisicos/");
-      if (aulasData) {
-        setAulas(aulasData);
+      const aulasData = await fetchData<{ count: number; next: string | null; previous: string | null; results: Aula[] }>("academic-setup/espacios-fisicos/");
+      if (aulasData && Array.isArray(aulasData.results)) {
+        setAulas(aulasData.results);
       }
       
       // Load unidades
-      const unidadesData = await fetchData<UnidadAcademica>("academic/unidades-academicas/");
-      if (unidadesData) {
-        setUnidades(unidadesData);
+      const unidadesData = await fetchData<{ count: number; next: string | null; previous: string | null; results: UnidadAcademica[] }>("academic-setup/unidades-academicas/");
+      if (unidadesData && Array.isArray(unidadesData.results)) {
+        setUnidades(unidadesData.results);
+      } else {
+        setUnidades([]);
       }
       
       // Load tipos de espacios
-      const tiposEspaciosData = await fetchData<TipoEspacio>("academic/tipos-espacio/");
-      if (tiposEspaciosData) {
-        setTiposEspacios(tiposEspaciosData);
+      const tiposEspaciosData = await fetchData<{ count: number; next: string | null; previous: string | null; results: TipoEspacio[] }>("academic-setup/tipos-espacio/");
+      if (tiposEspaciosData && Array.isArray(tiposEspaciosData.results)) {
+        setTiposEspacios(tiposEspaciosData.results);
+      } else {
+        setTiposEspacios([]);
       }
       
       setIsLoading(false);
@@ -132,7 +135,7 @@ const Aulas = () => {
     if (currentAula) {
       // Update existing aula
       const updated = await updateItem<Aula>(
-        "academic/espacios-fisicos/", 
+        "academic-setup/espacios-fisicos/", 
         currentAula.espacio_id, 
         values
       );
@@ -144,7 +147,7 @@ const Aulas = () => {
     } else {
       // Create new aula
       const created = await createItem<Aula>(
-        "academic/espacios-fisicos/", 
+        "academic-setup/espacios-fisicos/", 
         values
       );
       
@@ -163,7 +166,7 @@ const Aulas = () => {
   const confirmDelete = async () => {
     if (!currentAula) return;
     
-    const success = await deleteItem("academic/espacios-fisicos/", currentAula.espacio_id);
+    const success = await deleteItem("academic-setup/espacios-fisicos/", currentAula.espacio_id);
     
     if (success) {
       setAulas(aulas.filter(a => a.espacio_id !== currentAula.espacio_id));

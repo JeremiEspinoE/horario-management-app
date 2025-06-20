@@ -1,9 +1,13 @@
-
 import axios from 'axios';
 import { toast } from 'sonner';
 
+// Permitir configurar la baseURL por variable de entorno (útil para desarrollo/producción)
+const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/';
+
+console.log('[axiosClient] Usando baseURL:', baseURL);
+
 const client = axios.create({ 
-  baseURL: 'http://localhost:8000/api/' 
+  baseURL
 });
 
 client.interceptors.request.use(config => {
@@ -25,7 +29,8 @@ client.interceptors.response.use(
     
     // Handle network errors
     if (!error.response) {
-      toast.error('Error de conexión al servidor. Verifique su conexión a internet.');
+      toast.error('Error de conexión al servidor. Verifique su conexión a internet o CORS.');
+      console.error('[axiosClient] No response from backend. Puede ser un problema de CORS, red, o que el backend no está corriendo.');
       return Promise.reject(error);
     }
     

@@ -146,15 +146,15 @@ const Grupos = () => {
         const gruposData = gruposResponse.results || [];
         
         // Load carreras
-        const carrerasResponse = await fetchData<{ results: Carrera[] }>("academic/carreras/");
+        const carrerasResponse = await fetchData<{ results: Carrera[] }>("academic-setup/carreras/");
         const carrerasData = carrerasResponse.results || [];
         
         // Load materias
-        const materiasResponse = await fetchData<{ results: Materia[] }>("academic/materias/");
+        const materiasResponse = await fetchData<{ results: Materia[] }>("academic-setup/materias/");
         const materiasData = materiasResponse.results || [];
         
         // Load periodos
-        const periodosResponse = await fetchData<{ results: PeriodoAcademico[] }>("academic/periodos-academicos/");
+        const periodosResponse = await fetchData<{ results: PeriodoAcademico[] }>("academic-setup/periodos-academicos/");
         const periodosData = periodosResponse.results || [];
         
         // Load docentes

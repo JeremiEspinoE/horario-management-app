@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import client from "@/utils/axiosClient";
-import { fetchData } from "@/utils/crudHelpers";
+import { fetchData, getItemById } from "@/utils/crudHelpers";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -153,23 +153,24 @@ const HorarioManual = () => {
     const loadInitialData = async () => {
       setIsLoading(true);
       try {
-        // Load active periods
-        const periodosData = await fetchData<Periodo>("academic/periodos-academicos/?activo=true");
-        if (periodosData && periodosData.length > 0) {
+        // Load active periods (respuesta paginada)
+        const periodosResponse = await fetchData<{ results: Periodo[] }>("academic-setup/periodos-academicos/?activo=true");
+        const periodosData = periodosResponse?.results ?? [];
+        if (periodosData.length > 0) {
           setPeriodos(periodosData);
           setSelectedPeriodo(periodosData[0].periodo_id);
         }
-        
-        // Load academic units
-        const unidadesData = await fetchData<UnidadAcademica>("academic/unidades-academicas/");
-        if (unidadesData && unidadesData.length > 0) {
+        // Load academic units (respuesta paginada)
+        const unidadesResponse = await fetchData<{ results: UnidadAcademica[] }>("academic-setup/unidades-academicas/");
+        const unidadesData = unidadesResponse?.results ?? [];
+        if (unidadesData.length > 0) {
           setUnidades(unidadesData);
         }
-        
-        // Load time blocks
-        const bloquesData = await fetchData<BloqueHorario>("scheduling/bloques-horarios/");
-        if (bloquesData) {
-          setBloques(bloquesData.sort((a, b) => a.orden - b.orden));
+        // Load time blocks (respuesta paginada)
+        const bloquesResponse = await fetchData<{ results: BloqueHorario[] }>("scheduling/bloques-horarios/");
+        const bloquesData = bloquesResponse?.results ?? [];
+        if (bloquesData.length > 0) {
+          setBloques(bloquesData.sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)));
         }
       } catch (error) {
         console.error("Error loading initial data:", error);
@@ -188,13 +189,13 @@ const HorarioManual = () => {
       const loadCarreras = async () => {
         setIsLoading(true);
         try {
-          const carrerasData = await fetchData<CarreraDetalle>(`academic/carreras/?unidad=${selectedUnidad}`);
-          if (carrerasData) {
-            setCarreras(carrerasData);
-            setSelectedCarrera(null);
-            setGrupos([]);
-            setSelectedGrupo(null);
-          }
+          // Load carreras (respuesta paginada)
+          const carrerasResponse = await fetchData<{ results: CarreraDetalle[] }>(`academic-setup/carreras/?unidad=${selectedUnidad}`);
+          const carrerasData = carrerasResponse?.results ?? [];
+          setCarreras(carrerasData);
+          setSelectedCarrera(null);
+          setGrupos([]);
+          setSelectedGrupo(null);
         } catch (error) {
           console.error("Error loading carreras:", error);
           toast.error("Error al cargar las carreras");
@@ -202,7 +203,6 @@ const HorarioManual = () => {
           setIsLoading(false);
         }
       };
-      
       loadCarreras();
     }
   }, [selectedUnidad]);
@@ -213,17 +213,15 @@ const HorarioManual = () => {
       const loadGrupos = async () => {
         setIsLoading(true);
         try {
-          const gruposData = await fetchData<Grupo>(`scheduling/grupos/?carrera=${selectedCarrera}&periodo=${selectedPeriodo}`);
-          if (gruposData) {
-            setGrupos(gruposData);
-            setSelectedGrupo(null);
-          }
-          
-          // Load materias for this carrera
-          const materiasData = await fetchData<Materia>(`academic/materias/?carrera=${selectedCarrera}`);
-          if (materiasData) {
-            setMaterias(materiasData);
-          }
+          // Load grupos (respuesta paginada)
+          const gruposResponse = await fetchData<{ results: Grupo[] }>(`scheduling/grupos/?carrera=${selectedCarrera}&periodo=${selectedPeriodo}`);
+          const gruposData = gruposResponse?.results ?? [];
+          setGrupos(gruposData);
+          setSelectedGrupo(null);
+          // Load materias for this carrera (respuesta paginada)
+          const materiasResponse = await fetchData<{ results: Materia[] }>(`academic-setup/materias/?carrera=${selectedCarrera}`);
+          const materiasData = materiasResponse?.results ?? [];
+          setMaterias(materiasData);
         } catch (error) {
           console.error("Error loading grupos and materias:", error);
           toast.error("Error al cargar los grupos y materias");
@@ -231,7 +229,6 @@ const HorarioManual = () => {
           setIsLoading(false);
         }
       };
-      
       loadGrupos();
     }
   }, [selectedCarrera, selectedPeriodo]);
@@ -242,31 +239,24 @@ const HorarioManual = () => {
       const loadAsignacionData = async () => {
         setIsLoading(true);
         try {
-          // Load classrooms for this unit
-          const aulasData = await fetchData<Aula>(`academic/espacios-fisicos/?unidad=${selectedUnidad}`);
-          if (aulasData) {
-            setAulas(aulasData);
-          }
-          
-          // Load teachers for this unit
-          const docentesData = await fetchData<Docente>(`users/docentes/?unidad_principal=${selectedUnidad}`);
-          if (docentesData) {
-            setDocentes(docentesData);
-          }
-          
-          // Load existing schedules for this grupo and periodo
-          const horariosData = await fetchData<HorarioAsignado>(`scheduling/horarios-asignados/?grupo=${selectedGrupo}&periodo=${selectedPeriodo}`);
-          if (horariosData) {
-            setHorarios(horariosData);
-          }
-          
+          // Load classrooms for this unit (respuesta paginada)
+          const aulasResponse = await fetchData<{ results: Aula[] }>(`academic-setup/espacios-fisicos/?unidad=${selectedUnidad}`);
+          const aulasData = aulasResponse?.results ?? [];
+          setAulas(aulasData);
+          // Load teachers for this unit (respuesta paginada)
+          const docentesResponse = await fetchData<{ results: Docente[] }>(`users/docentes/?unidad_principal=${selectedUnidad}`);
+          const docentesData = docentesResponse?.results ?? [];
+          setDocentes(docentesData);
+          // Load existing schedules for this grupo and periodo (respuesta paginada)
+          const horariosResponse = await fetchData<{ results: HorarioAsignado[] }>(`scheduling/horarios-asignados/?grupo=${selectedGrupo}&periodo=${selectedPeriodo}`);
+          const horariosData = horariosResponse?.results ?? [];
+          setHorarios(horariosData);
           // Reset selection form
           setSelectedDocente(null);
           setSelectedAula(null);
           setSelectedDia(null);
           setSelectedBloque(null);
           setValidationError(null);
-          
         } catch (error) {
           console.error("Error loading assignment data:", error);
           toast.error("Error al cargar los datos para asignación");
@@ -274,7 +264,6 @@ const HorarioManual = () => {
           setIsLoading(false);
         }
       };
-      
       loadAsignacionData();
     }
   }, [selectedUnidad, selectedGrupo, selectedPeriodo]);
@@ -284,19 +273,61 @@ const HorarioManual = () => {
     if (selectedDocente && selectedPeriodo) {
       const loadDisponibilidad = async () => {
         try {
-          const disponibilidadData = await fetchData<DisponibilidadDocente>(`scheduling/disponibilidad-docentes/?docente=${selectedDocente}&periodo=${selectedPeriodo}`);
-          if (disponibilidadData) {
-            setDisponibilidadDocentes(disponibilidadData);
-          }
+          // Load disponibilidad (respuesta paginada)
+          const disponibilidadResponse = await fetchData<{ results: DisponibilidadDocente[] }>(`scheduling/disponibilidad-docentes/?docente=${selectedDocente}&periodo=${selectedPeriodo}`);
+          const disponibilidadData = disponibilidadResponse?.results ?? [];
+          setDisponibilidadDocentes(disponibilidadData);
         } catch (error) {
           console.error("Error loading teacher availability:", error);
           toast.error("Error al cargar la disponibilidad del docente");
         }
       };
-      
       loadDisponibilidad();
     }
   }, [selectedDocente, selectedPeriodo]);
+  
+  // Efecto para cargar docentes, aulas y bloques faltantes tras cargar horarios
+  useEffect(() => {
+    if (horarios.length === 0) return;
+
+    // Docentes faltantes
+    const docenteIdsEnHorarios = Array.from(new Set(horarios.map(h => h.docente)));
+    const docenteIdsLocales = new Set(docentes.map(d => d.docente_id));
+    const docentesFaltantes = docenteIdsEnHorarios.filter(id => !docenteIdsLocales.has(id));
+
+    // Aulas faltantes
+    const aulaIdsEnHorarios = Array.from(new Set(horarios.map(h => h.espacio)));
+    const aulaIdsLocales = new Set(aulas.map(a => a.espacio_id));
+    const aulasFaltantes = aulaIdsEnHorarios.filter(id => !aulaIdsLocales.has(id));
+
+    // Bloques faltantes
+    const bloqueIdsEnHorarios = Array.from(new Set(horarios.map(h => h.bloque_horario)));
+    const bloqueIdsLocales = new Set(bloques.map(b => b.bloque_def_id));
+    const bloquesFaltantes = bloqueIdsEnHorarios.filter(id => !bloqueIdsLocales.has(id));
+
+    // Función para cargar y agregar los faltantes
+    const cargarFaltantes = async () => {
+      // Docentes
+      for (const id of docentesFaltantes) {
+        const docente = await getItemById<Docente>("users/docentes/", id);
+        if (docente) setDocentes(prev => [...prev, docente]);
+      }
+      // Aulas
+      for (const id of aulasFaltantes) {
+        const aula = await getItemById<Aula>("academic-setup/espacios-fisicos/", id);
+        if (aula) setAulas(prev => [...prev, aula]);
+      }
+      // Bloques
+      for (const id of bloquesFaltantes) {
+        const bloque = await getItemById<BloqueHorario>("scheduling/bloques-horarios/", id);
+        if (bloque) setBloques(prev => [...prev, bloque]);
+      }
+    };
+
+    cargarFaltantes();
+    // Solo cuando cambian los horarios
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [horarios]);
   
   const getMateriaPorGrupo = (grupoId: number): MateriaDetalle | undefined => {
     const grupo = grupos.find(g => g.grupo_id === grupoId);
@@ -732,10 +763,10 @@ const HorarioManual = () => {
                           
                           return (
                             <tr key={horario.bloque_horario} className="border-b hover:bg-gray-50">
-                              <td className="p-3">{dia?.nombre || 'Desconocido'}</td>
-                              <td className="p-3">{bloque ? `${bloque.hora_inicio} - ${bloque.hora_fin}` : 'Desconocido'}</td>
-                              <td className="p-3">{docente ? `${docente.nombres} ${docente.apellidos}` : 'Desconocido'}</td>
-                              <td className="p-3">{aula?.nombre_espacio || 'Desconocido'}</td>
+                              <td className="p-3">{dia?.nombre || `ID: ${horario.dia_semana}`}</td>
+                              <td className="p-3">{bloque ? `${bloque.hora_inicio} - ${bloque.hora_fin}` : `ID: ${horario.bloque_horario}`}</td>
+                              <td className="p-3">{docente ? `${docente.nombres} ${docente.apellidos}` : `ID: ${horario.docente}`}</td>
+                              <td className="p-3">{aula ? aula.nombre_espacio : `ID: ${horario.espacio}`}</td>
                               <td className="p-3 text-center">
                                 <Button 
                                   variant="ghost" 

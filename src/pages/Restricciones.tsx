@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -95,7 +94,7 @@ const Restricciones = () => {
       }
       
       // Load periodos
-      const periodosData = await fetchData<Periodo>("academic/periodos-academicos/");
+      const periodosData = await fetchData<Periodo>("academic-setup/periodos-academicos/");
       if (periodosData) {
         setPeriodos(periodosData);
       }

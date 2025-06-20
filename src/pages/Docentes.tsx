@@ -116,7 +116,7 @@ const Docentes = () => {
         }
       
         // Load unidades
-        const unidadesData = await fetchData<ApiResponse<UnidadAcademica>>("academic/unidades-academicas/");
+        const unidadesData = await fetchData<ApiResponse<UnidadAcademica>>("academic-setup/unidades-academicas/");
         if (unidadesData?.results) {
           setUnidades(unidadesData.results);
         }     
@@ -128,7 +128,7 @@ const Docentes = () => {
         }
         
         // Load especialidades
-        const especialidadesData = await fetchData<ApiResponse<Especialidad>>("academic/especialidades/");
+        const especialidadesData = await fetchData<ApiResponse<Especialidad>>("academic-setup/especialidades/");
         if (especialidadesData?.results) {
           setEspecialidades(especialidadesData.results);
         }

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { BookOpen, User, FileText, Users, Calendar, ClipboardList } from 'lucide-react';
 import CardSummary from '@/components/CardSummary';
@@ -43,25 +42,25 @@ const DashboardAdmin = () => {
           bloques,
           horarios
         ] = await Promise.all([
-          client.get('academic/unidades-academicas/'),
-          client.get('academic/carreras/'),
-          client.get('academic/materias/'),
+          client.get('academic-setup/unidades-academicas/'),
+          client.get('academic-setup/carreras/'),
+          client.get('academic-setup/materias/'),
           client.get('scheduling/grupos/'),
-          client.get('academic/espacios-fisicos/'),
+          client.get('academic-setup/espacios-fisicos/'),
           client.get('users/docentes/'),
           client.get('scheduling/bloques-horarios/'),
           client.get('scheduling/horarios-asignados/')
         ]);
         
         setCounts({
-          unidades: unidades.data.length,
-          carreras: carreras.data.length,
-          materias: materias.data.length,
-          grupos: grupos.data.length,
-          aulas: aulas.data.length,
-          docentes: docentes.data.length,
-          bloques: bloques.data.length,
-          horarios: horarios.data.length
+          unidades: Array.isArray(unidades.data.results) ? unidades.data.results.length : Array.isArray(unidades.data) ? unidades.data.length : 0,
+          carreras: Array.isArray(carreras.data.results) ? carreras.data.results.length : Array.isArray(carreras.data) ? carreras.data.length : 0,
+          materias: Array.isArray(materias.data.results) ? materias.data.results.length : Array.isArray(materias.data) ? materias.data.length : 0,
+          grupos: Array.isArray(grupos.data.results) ? grupos.data.results.length : Array.isArray(grupos.data) ? grupos.data.length : 0,
+          aulas: Array.isArray(aulas.data.results) ? aulas.data.results.length : Array.isArray(aulas.data) ? aulas.data.length : 0,
+          docentes: Array.isArray(docentes.data.results) ? docentes.data.results.length : Array.isArray(docentes.data) ? docentes.data.length : 0,
+          bloques: Array.isArray(bloques.data.results) ? bloques.data.results.length : Array.isArray(bloques.data) ? bloques.data.length : 0,
+          horarios: Array.isArray(horarios.data.results) ? horarios.data.results.length : Array.isArray(horarios.data) ? horarios.data.length : 0
         });
       } catch (error) {
         console.error('Error fetching data:', error);

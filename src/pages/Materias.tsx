@@ -90,7 +90,7 @@ const Materias = () => {
       try {
         // Load carrera details
         const carreraData = await getItemById<Carrera>(
-          "academic/carreras/", 
+          "academic-setup/carreras/", 
           carreraId
         );
         
@@ -103,21 +103,23 @@ const Materias = () => {
         }
         
         // Load materias for this carrera
-        const materiasData = await fetchData<Materia>(
-          `academic/materias/?carrera=${carreraId}`
+        const materiasData = await fetchData<{ count: number; next: string | null; previous: string | null; results: Materia[] }>(
+          `academic-setup/materias/?carrera=${carreraId}`
         );
         
-        if (materiasData) {
-          setMaterias(materiasData);
+        if (materiasData && Array.isArray(materiasData.results)) {
+          setMaterias(materiasData.results);
         }
         
         // Load tipos de espacios
-        const tiposEspaciosData = await fetchData<TipoEspacio>(
-          "academic/tipos-espacio/"
+        const tiposEspaciosData = await fetchData<{ count: number; next: string | null; previous: string | null; results: TipoEspacio[] }>(
+          "academic-setup/tipos-espacio/"
         );
         
-        if (tiposEspaciosData) {
-          setTiposEspacios(tiposEspaciosData);
+        if (tiposEspaciosData && Array.isArray(tiposEspaciosData.results)) {
+          setTiposEspacios(tiposEspaciosData.results);
+        } else {
+          setTiposEspacios([]);
         }
       } catch (error) {
         console.error("Error loading data:", error);
@@ -205,7 +207,7 @@ const Materias = () => {
       if (currentMateria) {
         // Update existing materia
         const updated = await updateItem<Materia>(
-          "academic/materias/", 
+          "academic-setup/materias/", 
           currentMateria.materia_id, 
           values
         );
@@ -218,7 +220,7 @@ const Materias = () => {
       } else {
         // Create new materia
         const created = await createItem<Materia>(
-          "academic/materias/", 
+          "academic-setup/materias/", 
           values
         );
         
@@ -242,7 +244,7 @@ const Materias = () => {
   const confirmDelete = async () => {
     if (!currentMateria) return;
     
-    const success = await deleteItem("academic/materias/", currentMateria.materia_id);
+    const success = await deleteItem("academic-setup/materias/", currentMateria.materia_id);
     
     if (success) {
       setMaterias(materias.filter(m => m.materia_id !== currentMateria.materia_id));
