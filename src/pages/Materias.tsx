@@ -102,17 +102,19 @@ const Materias = () => {
           return;
         }
         
-        // Load materias for this carrera
-        const materiasData = await fetchData<{ count: number; next: string | null; previous: string | null; results: Materia[] }>(
-          `academic-setup/materias/?carrera=${carreraId}`
+        // Load materias for this carrera using the correct endpoint
+        const materiasResponse = await fetchData<{ materias: Materia[] }>(
+          `academic-setup/materias/por-carrera/${carreraId}/`
         );
         
-        if (materiasData && Array.isArray(materiasData.results)) {
-          setMaterias(materiasData.results);
+        if (materiasResponse && Array.isArray(materiasResponse.materias)) {
+          setMaterias(materiasResponse.materias);
+        } else {
+          setMaterias([]);
         }
         
         // Load tipos de espacios
-        const tiposEspaciosData = await fetchData<{ count: number; next: string | null; previous: string | null; results: TipoEspacio[] }>(
+        const tiposEspaciosData = await fetchData<ApiResponse<TipoEspacio>>(
           "academic-setup/tipos-espacio/"
         );
         

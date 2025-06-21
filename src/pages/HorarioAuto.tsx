@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import client from "@/utils/axiosClient";
-import { fetchData } from "@/utils/crudHelpers";
+import { fetchData, PaginatedResponse } from "@/utils/crudHelpers";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -65,10 +65,10 @@ const HorarioAuto = () => {
     const loadPeriodos = async () => {
       setIsLoading(true);
       try {
-        const periodosData = await fetchData<Periodo>("academic-setup/periodos-academicos/?activo=true");
-        if (periodosData && periodosData.length > 0) {
-          setPeriodos(periodosData);
-          setSelectedPeriodo(periodosData[0].periodo_id);
+        const periodosData = await fetchData<PaginatedResponse<Periodo>>("academic-setup/periodos-academicos/?activo=true");
+        if (periodosData && periodosData.results.length > 0) {
+          setPeriodos(periodosData.results);
+          setSelectedPeriodo(periodosData.results[0].periodo_id);
         }
       } catch (error) {
         console.error("Error cargando periodos:", error);

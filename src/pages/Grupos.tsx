@@ -10,6 +10,7 @@ import PageHeader from "@/components/PageHeader";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
@@ -24,7 +25,6 @@ interface Materia {
   materia_id: number;
   nombre_materia: string;
   codigo_materia: string;
-  carrera: number;
 }
 
 interface PeriodoAcademico {
@@ -65,8 +65,8 @@ interface CarreraDetalle {
 interface Grupo {
   grupo_id: number;
   codigo_grupo: string;
-  materia: number;
-  materia_detalle: MateriaDetalle;
+  materias: number[];
+  materias_detalle: MateriaDetalle[];
   carrera: number;
   carrera_detalle: CarreraDetalle;
   periodo: number;
@@ -86,7 +86,7 @@ interface Column {
 // Schema for form validation
 const formSchema = z.object({
   codigo_grupo: z.string().min(1, "El código es obligatorio"),
-  materia: z.number().min(1, "Debe seleccionar una materia"),
+  materias: z.array(z.number()).min(1, "Debe seleccionar al menos una materia"),
   carrera: z.number().min(1, "Debe seleccionar una carrera"),
   periodo: z.number().min(1, "Debe seleccionar un período"),
   numero_estudiantes_estimado: z.coerce.number().min(1, "Debe ingresar un número válido de estudiantes"),
@@ -121,7 +121,7 @@ const Grupos = () => {
     resolver: zodResolver(formSchema),
     defaultValues: {
       codigo_grupo: "",
-      materia: 0,
+      materias: [],
       carrera: 0,
       periodo: 0,
       numero_estudiantes_estimado: 0,
@@ -134,8 +134,32 @@ const Grupos = () => {
   
   // Update materias when carrera changes
   useEffect(() => {
-    setMateriasFiltradas(materias);
-  }, [materias]);
+    console.log("[Grupos] carreraId cambiado:", carreraId);
+    
+    if (carreraId && carreraId > 0) {
+      // Usar el endpoint específico para obtener materias por carrera
+      const loadMateriasPorCarrera = async () => {
+        try {
+          const response = await fetchData<{materias: Materia[], count: number}>(`academic-setup/materias/por-carrera/${carreraId}/`);
+          if (response && response.materias) {
+            console.log("[Grupos] materias cargadas para carrera", carreraId, ":", response.materias);
+            setMateriasFiltradas(response.materias);
+          } else {
+            console.log("[Grupos] No se encontraron materias para la carrera", carreraId);
+            setMateriasFiltradas([]);
+          }
+        } catch (error) {
+          console.error("[Grupos] Error cargando materias por carrera:", error);
+          setMateriasFiltradas([]);
+        }
+      };
+      
+      loadMateriasPorCarrera();
+    } else {
+      console.log("[Grupos] No hay carrera seleccionada, limpiando materias filtradas");
+      setMateriasFiltradas([]);
+    }
+  }, [carreraId]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -152,6 +176,7 @@ const Grupos = () => {
         // Load materias
         const materiasResponse = await fetchData<{ results: Materia[] }>("academic-setup/materias/");
         const materiasData = materiasResponse.results || [];
+        console.log("[Grupos] Materias cargadas:", materiasData);
         
         // Load periodos
         const periodosResponse = await fetchData<{ results: PeriodoAcademico[] }>("academic-setup/periodos-academicos/");
@@ -166,6 +191,8 @@ const Grupos = () => {
         setMaterias(materiasData);
         setPeriodos(periodosData);
         setDocentes(docentesData);
+        
+        console.log("[Grupos] Datos cargados - Carreras:", carrerasData.length, "Materias:", materiasData.length);
       } catch (error) {
         console.error("Error loading data:", error);
         toast.error("Error al cargar los datos");
@@ -182,7 +209,7 @@ const Grupos = () => {
       setCurrentGrupo(grupo);
       form.reset({
         codigo_grupo: grupo.codigo_grupo,
-        materia: grupo.materia,
+        materias: grupo.materias,
         carrera: grupo.carrera,
         periodo: grupo.periodo,
         numero_estudiantes_estimado: grupo.numero_estudiantes_estimado,
@@ -193,7 +220,7 @@ const Grupos = () => {
       setCurrentGrupo(null);
       form.reset({
         codigo_grupo: "",
-        materia: 0,
+        materias: [],
         carrera: 0,
         periodo: 0,
         numero_estudiantes_estimado: 0,
@@ -285,8 +312,8 @@ const Grupos = () => {
     },
     {
       header: "Materia",
-      key: "materia_detalle",
-      render: (row) => row.materia_detalle?.nombre_materia || "N/A",
+      key: "materias_detalle",
+      render: (row) => row.materias_detalle.map(md => md.nombre_materia).join(", ") || "N/A",
     },
     {
       header: "Carrera",
@@ -391,31 +418,34 @@ const Grupos = () => {
 
               <FormField
                 control={form.control}
-                name="materia"
+                name="materias"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Materia</FormLabel>
-                    <Select
-                      onValueChange={(value) => field.onChange(Number(value))}
-                      value={field.value?.toString()}
-                      disabled={!carreraId}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccione una materia" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {materiasFiltradas.map((materia) => (
-                          <SelectItem
-                            key={materia.materia_id}
-                            value={materia.materia_id.toString()}
+                    <FormLabel>Materias</FormLabel>
+                    <div className="space-y-2 max-h-40 overflow-y-auto border rounded-md p-3">
+                      {materiasFiltradas.map((materia) => (
+                        <div key={materia.materia_id} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`materia-${materia.materia_id}`}
+                            checked={field.value?.includes(materia.materia_id) || false}
+                            onCheckedChange={(checked) => {
+                              const currentMaterias = field.value || [];
+                              if (checked) {
+                                field.onChange([...currentMaterias, materia.materia_id]);
+                              } else {
+                                field.onChange(currentMaterias.filter(id => id !== materia.materia_id));
+                              }
+                            }}
+                          />
+                          <label
+                            htmlFor={`materia-${materia.materia_id}`}
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                           >
-                            {materia.nombre_materia}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                            {materia.nombre_materia} ({materia.codigo_materia})
+                          </label>
+                        </div>
+                      ))}
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}

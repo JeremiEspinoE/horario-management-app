@@ -62,12 +62,21 @@ export async function createItem<T>(endpoint: string, data: any): Promise<T | nu
 
 export async function updateItem<T>(endpoint: string, id: number | string, data: any): Promise<T | null> {
   try {
+    console.log(`[updateItem] Enviando datos a ${endpoint}${id}/:`, data);
     const response = await client.put<T>(`${endpoint}${id}/`, data);
     toast.success("Registro actualizado exitosamente");
     return response.data;
   } catch (error) {
     const axiosError = error as AxiosError;
     console.error(`Error updating item at ${endpoint}${id}/:`, axiosError);
+    
+    // Log detailed error information
+    if (axiosError.response) {
+      console.error('Response status:', axiosError.response.status);
+      console.error('Response data:', axiosError.response.data);
+      console.error('Response headers:', axiosError.response.headers);
+    }
+    
     toast.error(`Error al actualizar: ${axiosError.message}`);
     return null;
   }

@@ -40,8 +40,8 @@ interface MateriaDetalle {
 interface Grupo {
   grupo_id: number;
   codigo_grupo: string;
-  materia: number;
-  materia_detalle: MateriaDetalle;
+  materias: number[];
+  materias_detalle: MateriaDetalle[];
   carrera: number;
   carrera_detalle: CarreraDetalle;
   periodo: number;
@@ -331,7 +331,7 @@ const HorarioManual = () => {
   
   const getMateriaPorGrupo = (grupoId: number): MateriaDetalle | undefined => {
     const grupo = grupos.find(g => g.grupo_id === grupoId);
-    return grupo?.materia_detalle;
+    return grupo?.materias_detalle.find(m => m.materia_id === grupo.materias[0]);
   };
   
   const getMateriaHorasTotales = (materiaId: number): number => {
@@ -560,7 +560,7 @@ const HorarioManual = () => {
                     <SelectContent>
                       {grupos.map((grupo) => (
                         <SelectItem key={grupo.grupo_id} value={grupo.grupo_id.toString()}>
-                          {grupo.codigo_grupo} - {grupo.materia_detalle.nombre_materia}
+                          {grupo.codigo_grupo} - {grupo.materias_detalle?.map(m => m.nombre_materia).join(', ') || '(Sin materias asignadas)'}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -579,18 +579,23 @@ const HorarioManual = () => {
                       return <p>No se encontró información del grupo.</p>;
                     }
                     
-                    const horasTotales = grupo.materia_detalle.horas_academicas_teoricas + grupo.materia_detalle.horas_academicas_practicas;
+                    const materiaPrincipal = grupo.materias_detalle?.[0];
+                    if (!materiaPrincipal) {
+                      return <p>Este grupo no tiene materias asignadas.</p>;
+                    }
+
+                    const horasTotales = materiaPrincipal.horas_academicas_teoricas + materiaPrincipal.horas_academicas_practicas;
                     const horasAsignadas = getHorasAsignadasGrupo(grupo.grupo_id);
                     
                     return (
                       <div className="space-y-2 text-sm">
                         <div className="flex items-center">
                           <BookOpen className="w-4 h-4 mr-2 text-academic-primary" />
-                          <span>{grupo.materia_detalle.nombre_materia}</span>
+                          <span>{materiaPrincipal.nombre_materia}</span>
                         </div>
                         <div className="flex items-center">
                           <Clock className="w-4 h-4 mr-2 text-academic-primary" />
-                          <span>Horas necesarias: {horasTotales} ({grupo.materia_detalle.horas_academicas_teoricas} teóricas + {grupo.materia_detalle.horas_academicas_practicas} prácticas)</span>
+                          <span>Horas necesarias: {horasTotales} ({materiaPrincipal.horas_academicas_teoricas} teóricas + {materiaPrincipal.horas_academicas_practicas} prácticas)</span>
                         </div>
                         <div className="flex items-center">
                           <Calendar className="w-4 h-4 mr-2 text-academic-primary" />
