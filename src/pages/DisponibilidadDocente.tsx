@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Loader2, Upload, RefreshCw } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 interface Docente {
   docente_id: number;
@@ -30,6 +32,8 @@ interface BloqueHorario {
   hora_inicio: string;
   hora_fin: string;
   orden: number;
+  turno: string;
+  dia_semana: number;
 }
 
 interface DisponibilidadBloque {
@@ -76,6 +80,28 @@ const DisponibilidadDocente = () => {
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const loadDisponibilidad = async () => {
+    const docenteId = isAdmin ? selectedDocente : user?.docente_id;
+    if (!docenteId || !selectedPeriodo) {
+      setDisponibilidad([]);
+      return;
+    }
+    
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await client.get(`/scheduling/disponibilidad-docentes/?docente=${docenteId}&periodo=${selectedPeriodo}`);
+      setDisponibilidad(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error("Error cargando disponibilidad:", error);
+      setError("Error al cargar la disponibilidad.");
+      toast.error("Error al cargar la disponibilidad");
+      setDisponibilidad([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     const loadInitialData = async () => {
       setIsLoading(true);
@@ -98,8 +124,8 @@ const DisponibilidadDocente = () => {
           setSelectedPeriodo(null);
         }
         
-        // Cargar bloques horarios (respuesta paginada)
-        const bloquesResponse = await fetchData<{ results: BloqueHorario[] }>("scheduling/bloques-horarios/");
+        // Traer todos los bloques horarios
+        const bloquesResponse = await fetchData<{ results: BloqueHorario[] }>("scheduling/bloques-horarios/?page_size=100");
         const bloquesData = bloquesResponse?.results ?? [];
         console.log("Bloques loaded:", bloquesData);
         
@@ -143,46 +169,17 @@ const DisponibilidadDocente = () => {
     loadInitialData();
   }, [isAdmin, user]);
 
-  // Cargar disponibilidad cuando se selecciona docente y periodo
+  // Cargar disponibilidad cuando el docente y el periodo estén listos
   useEffect(() => {
-    if (selectedDocente && selectedPeriodo) {
-      loadDisponibilidad();
-    }
+    loadDisponibilidad();
   }, [selectedDocente, selectedPeriodo]);
 
-  const loadDisponibilidad = async () => {
-    if (!selectedDocente || !selectedPeriodo) {
-      console.log("Cannot load disponibilidad: missing docente or periodo");
-      return;
-    }
-    
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      console.log(`Loading disponibilidad for docente ${selectedDocente} and periodo ${selectedPeriodo}`);
-      const response = await client.get(`/scheduling/disponibilidad-docentes/?docente=${selectedDocente}&periodo=${selectedPeriodo}`);
-      console.log("Disponibilidad loaded:", response.data);
-      setDisponibilidad(Array.isArray(response.data) ? response.data : []);
-    } catch (error) {
-      console.error("Error cargando disponibilidad:", error);
-      setError("Error al cargar la disponibilidad. Por favor, intente nuevamente.");
-      toast.error("Error al cargar la disponibilidad");
-      setDisponibilidad([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const handleToggleDisponibilidad = async (dia_id: number, bloque_id: number) => {
+    const docenteId = isAdmin ? selectedDocente : user?.docente_id;
+    if (!docenteId || !selectedPeriodo || isSaving) return;
 
-  const handleToggleDisponibilidad = async (dia: number, bloque: number) => {
-    if (!selectedDocente || !selectedPeriodo) {
-      toast.error("Seleccione un docente y un periodo");
-      return;
-    }
-    
-    // Buscar si ya existe este bloque
     const existeBloque = disponibilidad.find(
-      d => d.dia_semana === dia && d.bloque_horario === bloque
+      d => d.dia_semana === dia_id && d.bloque_horario === bloque_id
     );
     
     setIsSaving(true);
@@ -204,10 +201,10 @@ const DisponibilidadDocente = () => {
       } else {
         // Crear nuevo registro de disponibilidad
         const newDisponibilidad = {
-          docente: selectedDocente,
+          docente: docenteId,
           periodo: selectedPeriodo,
-          dia_semana: dia,
-          bloque_horario: bloque,
+          dia_semana: dia_id,
+          bloque_horario: bloque_id,
           esta_disponible: true
         };
         
@@ -249,21 +246,24 @@ const DisponibilidadDocente = () => {
     setIsUploading(true);
     
     try {
+      const docenteId = isAdmin ? selectedDocente : user?.docente_id;
+      if (!docenteId) {
+        toast.error("No se ha podido identificar al docente.");
+        return;
+      }
+      
       const formData = new FormData();
       formData.append('file', file);
       formData.append('periodo_id', selectedPeriodo.toString());
-      
-      if (selectedDocente) {
-        formData.append('docente_id', selectedDocente.toString());
-      }
+      formData.append('docente_id', docenteId.toString());
       
       console.log("Uploading file with formData:", {
         file: file.name,
         periodo_id: selectedPeriodo,
-        docente_id: selectedDocente
+        docente_id: docenteId
       });
       
-      await client.post('/scheduling/disponibilidad-docentes/cargar-disponibilidad-excel/', formData, {
+      await client.post('/scheduling/acciones-horario/importar-disponibilidad-excel/', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -280,16 +280,30 @@ const DisponibilidadDocente = () => {
     }
   };
 
-  const isDisponible = (dia: number, bloque: number): boolean => {
+  const isDisponible = (dia_id: number, bloque_id: number): boolean => {
     if (!Array.isArray(disponibilidad)) {
       console.warn('disponibilidad no es un array:', disponibilidad);
       return false;
     }
     const bloqueDisponibilidad = disponibilidad.find(
-      d => d.dia_semana === dia && d.bloque_horario === bloque
+      d => d.dia_semana === dia_id && d.bloque_horario === bloque_id
     );
     return bloqueDisponibilidad ? bloqueDisponibilidad.esta_disponible : false;
   };
+
+  // Agrupar bloques por hora para la tabla
+  const bloquesPorHora = bloques.reduce((acc, bloque) => {
+    const key = `${bloque.hora_inicio}-${bloque.hora_fin}`;
+    if (!acc[key]) {
+      acc[key] = { hora_inicio: bloque.hora_inicio, hora_fin: bloque.hora_fin, bloques: [] };
+    }
+    acc[key].bloques.push(bloque);
+    return acc;
+  }, {} as Record<string, { hora_inicio: string; hora_fin: string; bloques: BloqueHorario[] }>);
+  
+  const bloquesOrdenados = Object.values(bloquesPorHora).sort((a, b) => 
+    a.hora_inicio.localeCompare(b.hora_inicio)
+  );
 
   if (error) {
     return (
@@ -329,7 +343,7 @@ const DisponibilidadDocente = () => {
             <div className="space-y-4">
               {isAdmin && (
                 <div>
-                  <label className="block text-sm font-medium mb-1">Docente</label>
+                  <Label>Docente</Label>
                   <Select 
                     onValueChange={(value) => setSelectedDocente(Number(value))}
                     value={selectedDocente?.toString() || ""}
@@ -349,7 +363,7 @@ const DisponibilidadDocente = () => {
               )}
               
               <div>
-                <label className="block text-sm font-medium mb-1">Periodo Académico</label>
+                <Label>Periodo Académico</Label>
                 <Select 
                   onValueChange={(value) => setSelectedPeriodo(Number(value))}
                   value={selectedPeriodo?.toString() || ""}
@@ -368,22 +382,21 @@ const DisponibilidadDocente = () => {
                 </Select>
               </div>
               
-              <div>
+              <div className="flex items-end">
                 <Button 
+                  onClick={loadDisponibilidad} 
                   variant="outline" 
-                  onClick={loadDisponibilidad}
-                  className="w-full"
-                  disabled={!selectedDocente || !selectedPeriodo || isLoading}
+                  disabled={isLoading}
                 >
-                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-                  Recargar Disponibilidad
+                  <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                  Recargar
                 </Button>
               </div>
             </div>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Cargar desde Excel</label>
+                <Label>Cargar desde Excel</Label>
                 <div className="flex space-x-2">
                   <Input 
                     type="file" 
@@ -421,32 +434,31 @@ const DisponibilidadDocente = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {bloques.map((bloque) => (
-                    <tr key={bloque.bloque_def_id} className="border-b hover:bg-gray-50">
+                  {bloquesOrdenados.map(({ hora_inicio, hora_fin, bloques: bloquesDelHorario }) => (
+                    <tr key={`${hora_inicio}-${hora_fin}`} className="border-b hover:bg-gray-50">
                       <td className="p-3 font-medium">
-                        {bloque.hora_inicio} - {bloque.hora_fin}
+                        {hora_inicio} - {hora_fin}
                       </td>
-                      {diasSemana.map((dia) => (
-                        <td 
-                          key={`${bloque.bloque_def_id}-${dia.id}`} 
-                          className="p-3 text-center"
-                        >
-                          <button
-                            className={`w-6 h-6 rounded-full transition-colors ${
-                              isDisponible(dia.id, bloque.bloque_def_id) 
-                                ? 'bg-green-500 hover:bg-green-600' 
-                                : 'bg-gray-200 hover:bg-gray-300'
-                            }`}
-                            onClick={() => handleToggleDisponibilidad(dia.id, bloque.bloque_def_id)}
-                            disabled={isSaving}
-                            type="button"
+                      {diasSemana.map((dia) => {
+                        const bloqueActual = bloquesDelHorario.find(b => b.dia_semana === dia.id);
+                        return (
+                          <td 
+                            key={`${hora_inicio}-${hora_fin}-${dia.id}`} 
+                            className="p-3 text-center"
                           >
-                            {isDisponible(dia.id, bloque.bloque_def_id) && (
-                              <span className="text-white">✓</span>
+                            {bloqueActual ? (
+                              <Checkbox
+                                checked={isDisponible(dia.id, bloqueActual.bloque_def_id)}
+                                onCheckedChange={() => handleToggleDisponibilidad(dia.id, bloqueActual.bloque_def_id)}
+                                disabled={isSaving}
+                                id={`check-${dia.id}-${bloqueActual.bloque_def_id}`}
+                              />
+                            ) : (
+                              <span className="text-gray-300">-</span>
                             )}
-                          </button>
-                        </td>
-                      ))}
+                          </td>
+                        );
+                      })}
                     </tr>
                   ))}
                 </tbody>

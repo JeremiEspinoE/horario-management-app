@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -25,6 +24,7 @@ import Docentes from "./pages/Docentes";
 import Aulas from "./pages/Aulas";
 import Grupos from "./pages/Grupos";
 import DisponibilidadDocente from "./pages/DisponibilidadDocente";
+import MiDisponibilidad from "./pages/MiDisponibilidad";
 import HorarioManual from "./pages/HorarioManual";
 import HorarioAuto from "./pages/HorarioAuto";
 import ReportesHorarios from "./pages/ReportesHorarios";
@@ -80,7 +80,7 @@ const App = () => (
                 >
                   <Route path="/dashboard-docente" element={<DashboardDocente />} />
                   <Route path="/docente/dashboard" element={<DashboardDocente />} />
-                  <Route path="/docente/disponibilidad" element={<DisponibilidadDocente />} />
+                  <Route path="/docente/disponibilidad" element={<MiDisponibilidad />} />
                   <Route path="/docente/horario" element={<ReportesHorarios />} />
                   <Route path="/docente/exportar" element={<ReportesHorarios />} />
                 </Route>

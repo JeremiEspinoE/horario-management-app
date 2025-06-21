@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { fetchData, createItem, updateItem, deleteItem } from "@/utils/crudHelpers";
+import { fetchData, PaginatedResponse, createItem, updateItem, deleteItem } from "@/utils/crudHelpers";
 import DataTable from "@/components/DataTable";
 import FormModal from "@/components/FormModal";
 import ConfirmationDialog from "@/components/ConfirmationDialog";
@@ -88,15 +88,15 @@ const Restricciones = () => {
       setIsLoading(true);
       
       // Load restricciones
-      const restriccionesData = await fetchData<Restriccion>("scheduling/configuracion-restricciones/");
-      if (restriccionesData) {
-        setRestricciones(restriccionesData);
+      const restriccionesData = await fetchData<PaginatedResponse<Restriccion>>("scheduling/configuracion-restricciones/");
+      if (restriccionesData && restriccionesData.results) {
+        setRestricciones(restriccionesData.results);
       }
       
       // Load periodos
-      const periodosData = await fetchData<Periodo>("academic-setup/periodos-academicos/");
-      if (periodosData) {
-        setPeriodos(periodosData);
+      const periodosData = await fetchData<PaginatedResponse<Periodo>>("academic-setup/periodos-academicos/");
+      if (periodosData && periodosData.results) {
+        setPeriodos(periodosData.results);
       }
       
       setIsLoading(false);

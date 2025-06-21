@@ -23,63 +23,64 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from '@/contexts/AuthContext';
 
 interface Periodo {
-  id: number;
-  nombre: string;
+  periodo_id: number;
+  nombre_periodo: string;
   fecha_inicio: string;
   fecha_fin: string;
   activo: boolean;
 }
 
 interface UnidadAcademica {
-  id: number;
+  unidad_id: number;
   nombre_unidad: string;
 }
 
 interface Carrera {
-  id: number;
+  carrera_id: number;
   nombre_carrera: string;
   codigo_carrera: string;
 }
 
 interface Docente {
-  id: number;
+  docente_id: number;
   nombres: string;
   apellidos: string;
   codigo_docente: string;
 }
 
 interface Grupo {
-  id: number;
+  grupo_id: number;
   codigo_grupo: string;
-  materia: number;
+  materias: number[];
 }
 
 interface Aula {
-  id: number;
+  espacio_id: number;
   nombre_espacio: string;
 }
 
 interface BloqueHorario {
-  id: number;
+  bloque_def_id: number;
   hora_inicio: string;
   hora_fin: string;
   orden: number;
 }
 
 interface Materia {
-  id: number;
+  materia_id: number;
   nombre_materia: string;
   codigo_materia: string;
 }
 
 interface HorarioAsignado {
-  id: number;
+  horario_id: number;
   grupo: number;
   docente: number;
   espacio: number;
   periodo: number;
   dia_semana: number;
   bloque_horario: number;
+  materia: number;
 }
 
 interface HorarioCelda {
@@ -148,16 +149,20 @@ const ReportesHorarios = () => {
         const periodosData = periodosResponse?.results ?? [];
         if (periodosData.length > 0) {
           setPeriodos(periodosData);
-          setSelectedPeriodo(periodosData[0].id);
+          setSelectedPeriodo(periodosData[0].periodo_id);
         }
-        // Load time blocks (respuesta paginada)
-        const bloquesResponse = await fetchData<{ results: BloqueHorario[] }>("scheduling/bloques-horarios/");
+        // Load time blocks (respuesta paginada) - Aumentar page_size para traer todos
+        const bloquesResponse = await fetchData<{ results: BloqueHorario[] }>("scheduling/bloques-horarios/?page_size=100");
         const bloquesData = bloquesResponse?.results ?? [];
         setBloques(bloquesData.sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)));
         // Load academic units (respuesta paginada)
         const unidadesResponse = await fetchData<{ results: UnidadAcademica[] }>("academic-setup/unidades-academicas/");
         const unidadesData = unidadesResponse?.results ?? [];
         setUnidades(unidadesData);
+        // Selección automática de la primera unidad académica
+        if (unidadesData.length > 0 && !selectedUnidad) {
+          setSelectedUnidad(unidadesData[0].unidad_id);
+        }
       } catch (error) {
         console.error("Error loading initial data:", error);
         toast.error("Error al cargar los datos iniciales");
@@ -202,23 +207,23 @@ const ReportesHorarios = () => {
   // Load grupos when carrera changes
   useEffect(() => {
     if (selectedCarrera && selectedPeriodo) {
-      const loadGrupos = async () => {
+      const loadGruposYMaterias = async () => {
         try {
           // Load grupos (respuesta paginada)
           const gruposResponse = await fetchData<{ results: Grupo[] }>(`scheduling/grupos/?carrera=${selectedCarrera}&periodo=${selectedPeriodo}`);
           const gruposData = gruposResponse?.results ?? [];
           setGrupos(Array.isArray(gruposData) ? gruposData : []);
-          // Load materias for this carrera (respuesta paginada)
-          const materiasResponse = await fetchData<{ results: Materia[] }>(`academic-setup/materias/?carrera=${selectedCarrera}`);
-          const materiasData = materiasResponse?.results ?? [];
+          // Load materias for this carrera
+          const materiasResponse = await fetchData<{ materias: Materia[] }>(`academic-setup/materias/por-carrera/${selectedCarrera}/`);
+          const materiasData = materiasResponse?.materias ?? [];
           setMaterias(Array.isArray(materiasData) ? materiasData : []);
           setSelectedGrupo(null);
         } catch (error) {
-          console.error("Error loading grupos:", error);
-          toast.error("Error al cargar los grupos");
+          console.error("Error loading grupos/materias:", error);
+          toast.error("Error al cargar los grupos y materias");
         }
       };
-      loadGrupos();
+      loadGruposYMaterias();
     }
   }, [selectedCarrera, selectedPeriodo]);
   
@@ -244,7 +249,13 @@ const ReportesHorarios = () => {
     if (selectedGrupo) {
       endpoint += `&grupo=${selectedGrupo}`;
     } else if (selectedCarrera) {
-      endpoint += `&carrera=${selectedCarrera}`;
+      // Si no hay grupo pero sí carrera, filtramos por todos los grupos de esa carrera
+      const gruposDeCarrera = grupos.filter(g => g.carrera === selectedCarrera).map(g => g.grupo_id);
+      if (gruposDeCarrera.length > 0) {
+        endpoint += `&grupo__in=${gruposDeCarrera.join(',')}`;
+      } else {
+         endpoint += `&carrera=${selectedCarrera}`; // Fallback por si la logica de grupos no funciona
+      }
     }
     if (selectedDocente) {
       endpoint += `&docente=${selectedDocente}`;
@@ -261,10 +272,10 @@ const ReportesHorarios = () => {
       if (horariosData) {
         const celdas: HorarioCelda[] = [];
         for (const horario of horariosData) {
-          const grupo = grupos.find(g => g.id === horario.grupo);
-          const materia = grupo ? materias.find(m => m.id === grupo.materia) : null;
-          const docente = docentes.find(d => d.id === horario.docente);
-          const aula = aulas.find(a => a.id === horario.espacio);
+          const grupo = grupos.find(g => g.grupo_id === horario.grupo);
+          const materia = materias.find(m => m.materia_id === horario.materia);
+          const docente = docentes.find(d => d.docente_id === horario.docente);
+          const aula = aulas.find(a => a.espacio_id === horario.espacio);
           if (materia) {
             const color = stringToColor(materia.nombre_materia);
             celdas.push({
@@ -326,7 +337,7 @@ const ReportesHorarios = () => {
       a.href = url;
       
       const currentDate = new Date().toISOString().slice(0, 10);
-      const periodoName = periodos.find(p => p.id === selectedPeriodo)?.nombre || 'periodo';
+      const periodoName = periodos.find(p => p.periodo_id === selectedPeriodo)?.nombre_periodo || 'periodo';
       
       a.download = `horarios_${periodoName}_${currentDate}.xlsx`;
       document.body.appendChild(a);
@@ -366,9 +377,6 @@ const ReportesHorarios = () => {
   const getHorarioPorDiaBloque = (diaId: number, bloqueId: number): HorarioCelda | null => {
     return horariosCeldas.find(h => h.diaId === diaId && h.bloqueId === bloqueId) || null;
   };
-  
-  // Log para depuración de docentes y selección
-  console.log('Docentes disponibles:', docentes, 'ID seleccionado:', selectedDocente);
   
   return (
     <div className="container mx-auto py-6">
@@ -439,9 +447,9 @@ const ReportesHorarios = () => {
                     <SelectValue placeholder="Seleccionar periodo" />
                   </SelectTrigger>
                   <SelectContent>
-                    {periodos.map((periodo) => (
-                      <SelectItem key={periodo.id} value={periodo.id.toString()}>
-                        {periodo.nombre}
+                    {periodos.filter(p => p && p.periodo_id != null).map((periodo) => (
+                      <SelectItem key={periodo.periodo_id} value={periodo.periodo_id.toString()}>
+                        {periodo.nombre_periodo}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -458,8 +466,8 @@ const ReportesHorarios = () => {
                     <SelectValue placeholder="Seleccionar unidad" />
                   </SelectTrigger>
                   <SelectContent>
-                    {unidades.map((unidad) => (
-                      <SelectItem key={unidad.id} value={unidad.id.toString()}>
+                    {unidades.filter(u => u && u.unidad_id != null).map((unidad) => (
+                      <SelectItem key={unidad.unidad_id} value={unidad.unidad_id.toString()}>
                         {unidad.nombre_unidad}
                       </SelectItem>
                     ))}
@@ -470,17 +478,17 @@ const ReportesHorarios = () => {
               <div>
                 <Label htmlFor="carrera">Carrera</Label>
                 <Select 
-                  value={selectedCarrera?.toString() || ""}
-                  onValueChange={(value) => setSelectedCarrera(Number(value))}
+                  value={selectedCarrera?.toString() || "all"}
+                  onValueChange={(value) => setSelectedCarrera(value === "all" ? null : Number(value))}
                   disabled={!selectedUnidad}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar carrera" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todas las carreras</SelectItem>
-                    {carreras.map((carrera) => (
-                      <SelectItem key={carrera.id} value={carrera.id.toString()}>
+                    <SelectItem value="all">Todas las carreras</SelectItem>
+                    {carreras.filter(c => c && c.carrera_id != null).map((carrera) => (
+                      <SelectItem key={carrera.carrera_id} value={carrera.carrera_id.toString()}>
                         {carrera.nombre_carrera}
                       </SelectItem>
                     ))}
@@ -493,9 +501,9 @@ const ReportesHorarios = () => {
               <div>
                 <Label htmlFor="grupo">Grupo/Sección</Label>
                 <Select 
-                  value={selectedGrupo?.toString() || ""}
+                  value={selectedGrupo?.toString() || "all"}
                   onValueChange={(value) => {
-                    setSelectedGrupo(value ? Number(value) : null);
+                    setSelectedGrupo(value === "all" ? null : Number(value));
                     setSelectedDocente(null);
                     setSelectedAula(null);
                   }}
@@ -505,12 +513,13 @@ const ReportesHorarios = () => {
                     <SelectValue placeholder="Seleccionar grupo" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todos los grupos</SelectItem>
-                    {grupos.map((grupo) => {
-                      const materia = materias.find(m => m.id === grupo.materia);
+                    <SelectItem value="all">Todos los grupos</SelectItem>
+                    {grupos.filter(g => g && g.grupo_id != null).map((grupo) => {
+                      // Since a group can have multiple materias, we simplify the display.
+                      // A better approach might be a multi-level select or a different UI.
                       return (
-                        <SelectItem key={grupo.id} value={grupo.id.toString()}>
-                          {grupo.codigo_grupo} - {materia?.nombre_materia || 'Desconocida'}
+                        <SelectItem key={grupo.grupo_id} value={grupo.grupo_id.toString()}>
+                          {grupo.codigo_grupo}
                         </SelectItem>
                       );
                     })}
@@ -523,9 +532,9 @@ const ReportesHorarios = () => {
               <div>
                 <Label htmlFor="docente">Docente</Label>
                 <Select 
-                  value={selectedDocente?.toString() || ""}
+                  value={selectedDocente?.toString() || "all"}
                   onValueChange={(value) => {
-                    setSelectedDocente(value ? Number(value) : null);
+                    setSelectedDocente(value === "all" ? null : Number(value));
                     setSelectedGrupo(null);
                     setSelectedAula(null);
                   }}
@@ -535,9 +544,9 @@ const ReportesHorarios = () => {
                     <SelectValue placeholder="Seleccionar docente" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todos los docentes</SelectItem>
-                    {docentes.map((docente) => (
-                      <SelectItem key={docente.id} value={docente.id.toString()}>
+                    <SelectItem value="all">Todos los docentes</SelectItem>
+                    {docentes.filter(d => d && d.docente_id != null).map((docente) => (
+                      <SelectItem key={docente.docente_id} value={docente.docente_id.toString()}>
                         {docente.nombres} {docente.apellidos}
                       </SelectItem>
                     ))}
@@ -550,9 +559,9 @@ const ReportesHorarios = () => {
               <div>
                 <Label htmlFor="aula">Aula</Label>
                 <Select 
-                  value={selectedAula?.toString() || ""}
+                  value={selectedAula?.toString() || "all"}
                   onValueChange={(value) => {
-                    setSelectedAula(value ? Number(value) : null);
+                    setSelectedAula(value === "all" ? null : Number(value));
                     setSelectedGrupo(null);
                     setSelectedDocente(null);
                   }}
@@ -562,9 +571,9 @@ const ReportesHorarios = () => {
                     <SelectValue placeholder="Seleccionar aula" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todas las aulas</SelectItem>
-                    {aulas.map((aula) => (
-                      <SelectItem key={aula.id} value={aula.id.toString()}>
+                    <SelectItem value="all">Todas las aulas</SelectItem>
+                    {aulas.filter(a => a && a.espacio_id != null).map((aula) => (
+                      <SelectItem key={aula.espacio_id} value={aula.espacio_id.toString()}>
                         {aula.nombre_espacio}
                       </SelectItem>
                     ))}
@@ -583,17 +592,17 @@ const ReportesHorarios = () => {
             <h3 className="font-medium text-academic-primary">
               {(() => {
                 if (activeTab === 'grupo' && selectedGrupo) {
-                  const grupo = grupos.find(g => g.id === selectedGrupo);
-                  const materia = grupo ? materias.find(m => m.id === grupo.materia) : null;
-                  return `Horario: ${grupo?.codigo_grupo || ''} - ${materia?.nombre_materia || ''}`;
+                  const grupo = grupos.find(g => g.grupo_id === selectedGrupo);
+                  // Since a group can have multiple materias, we show a generic title or the code
+                  return `Horario del Grupo: ${grupo?.codigo_grupo || ''}`;
                 } else if (activeTab === 'docente' && selectedDocente) {
-                  const docente = docentes.find(d => d.id === selectedDocente);
+                  const docente = docentes.find(d => d.docente_id === selectedDocente);
                   return `Horario: ${docente?.nombres || ''} ${docente?.apellidos || ''}`;
                 } else if (activeTab === 'aula' && selectedAula) {
-                  const aula = aulas.find(a => a.id === selectedAula);
+                  const aula = aulas.find(a => a.espacio_id === selectedAula);
                   return `Horario: Aula ${aula?.nombre_espacio || ''}`;
                 } else {
-                  return `Horario ${periodos.find(p => p.id === selectedPeriodo)?.nombre || ''}`;
+                  return `Horario ${periodos.find(p => p.periodo_id === selectedPeriodo)?.nombre_periodo || ''}`;
                 }
               })()}
             </h3>
@@ -619,17 +628,17 @@ const ReportesHorarios = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {bloques.map((bloque) => (
-                    <tr key={bloque.id} className="group/row hover:bg-gray-50">
+                  {bloques.filter(b => b && b.bloque_def_id != null).map((bloque) => (
+                    <tr key={bloque.bloque_def_id} className="group/row hover:bg-gray-50">
                       <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 border-r group-hover/row:bg-gray-100">
                         {bloque.hora_inicio} - {bloque.hora_fin}
                       </td>
                       {diasSemana.map((dia) => {
-                        const horarioCelda = getHorarioPorDiaBloque(dia.id, bloque.id);
+                        const horarioCelda = getHorarioPorDiaBloque(dia.id, bloque.bloque_def_id);
                         
                         return (
                           <td 
-                            key={`${bloque.id}-${dia.id}`} 
+                            key={`${bloque.bloque_def_id}-${dia.id}`} 
                             className="px-2 py-2 text-sm border-r"
                           >
                             {horarioCelda ? (
