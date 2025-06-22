@@ -113,6 +113,28 @@ const stringToColor = (str: string) => {
   return `hsla(${hue}, 80%, 85%, 0.85)`;
 };
 
+// Helper function to fetch all paginated data
+const fetchAllPaginatedData = async <T,>(url: string): Promise<T[]> => {
+  const items: T[] = [];
+  let nextUrl: string | null = url;
+  while (nextUrl) {
+    try {
+      const response = await client.get(nextUrl);
+      items.push(...response.data.results);
+      nextUrl = response.data.next;
+      if (nextUrl) {
+        // Convert absolute URL to relative path for the next request
+        const urlObject = new URL(nextUrl);
+        nextUrl = urlObject.pathname.replace('/api/', '') + urlObject.search;
+      }
+    } catch (error) {
+      console.error(`Error fetching paginated data from ${nextUrl}:`, error);
+      break;
+    }
+  }
+  return items;
+};
+
 const ReportesHorarios = () => {
   const { user, role } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
@@ -174,33 +196,34 @@ const ReportesHorarios = () => {
     loadInitialData();
   }, []);
   
-  // Load carreras when unidad changes
+  // Load carreras, aulas y docentes when unidad changes
   useEffect(() => {
     if (selectedUnidad) {
-      const loadCarreras = async () => {
+      const loadUnitData = async () => {
         try {
-          // Load carreras (respuesta paginada)
+          // Load carreras (paginated, usually not many)
           const carrerasResponse = await fetchData<{ results: Carrera[] }>(`academic-setup/carreras/?unidad=${selectedUnidad}`);
-          const carrerasData = carrerasResponse?.results ?? [];
-          setCarreras(Array.isArray(carrerasData) ? carrerasData : []);
-          // Load aulas for this unidad (respuesta paginada)
-          const aulasResponse = await fetchData<{ results: Aula[] }>(`academic-setup/espacios-fisicos/?unidad=${selectedUnidad}`);
-          const aulasData = aulasResponse?.results ?? [];
-          setAulas(Array.isArray(aulasData) ? aulasData : []);
-          // Load docentes for this unidad (respuesta paginada)
-          const docentesResponse = await fetchData<{ results: Docente[] }>(`users/docentes/?unidad_principal=${selectedUnidad}`);
-          const docentesData = docentesResponse?.results ?? [];
-          setDocentes(Array.isArray(docentesData) ? docentesData : []);
+          setCarreras(carrerasResponse?.results ?? []);
+
+          // Load ALL aulas for this unit
+          const allAulas = await fetchAllPaginatedData<Aula>(`academic-setup/espacios-fisicos/?unidad=${selectedUnidad}`);
+          setAulas(allAulas);
+
+          // Load ALL docentes for this unit with corrected parameter
+          const allDocentes = await fetchAllPaginatedData<Docente>(`users/docentes/?unidad_id=${selectedUnidad}`);
+          setDocentes(allDocentes);
+
+          // Reset dependent filters
           setSelectedCarrera(null);
           setSelectedGrupo(null);
           setSelectedAula(null);
           setSelectedDocente(null);
         } catch (error) {
-          console.error("Error loading carreras:", error);
-          toast.error("Error al cargar las carreras");
+          console.error("Error loading data for the selected unit:", error);
+          toast.error("Error al cargar los datos de la unidad");
         }
       };
-      loadCarreras();
+      loadUnitData();
     }
   }, [selectedUnidad]);
   

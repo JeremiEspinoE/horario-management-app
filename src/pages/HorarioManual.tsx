@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Check, AlertTriangle, Calendar, Clock, BookOpen, Building, Users, MapPin } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 
 interface UnidadAcademica {
   unidad_id: number;
@@ -92,14 +93,14 @@ interface Periodo {
   activo: boolean;
 }
 
-interface HorarioAsignado {
-  horario_id: number;
+interface Horario {
+  horario_id?: number;
   grupo: number;
-  docente: number;
-  espacio: number;
-  periodo: number;
   dia_semana: number;
   bloque_horario: number;
+  docente: number;
+  espacio: number;
+  materia: number;
 }
 
 interface DisponibilidadDocente {
@@ -140,7 +141,7 @@ const HorarioManual = () => {
   const [aulas, setAulas] = useState<Aula[]>([]);
   const [bloques, setBloques] = useState<BloqueHorario[]>([]);
   const [periodos, setPeriodos] = useState<Periodo[]>([]);
-  const [horarios, setHorarios] = useState<HorarioAsignado[]>([]);
+  const [horarios, setHorarios] = useState<Horario[]>([]);
   const [disponibilidadDocentes, setDisponibilidadDocentes] = useState<DisponibilidadDocente[]>([]);
   
   // Selected values
@@ -283,7 +284,7 @@ const HorarioManual = () => {
           const docentesData = docentesResponse?.results ?? [];
           setDocentes(docentesData);
           // Load existing schedules for this grupo and periodo (respuesta paginada)
-          const horariosResponse = await fetchData<{ results: HorarioAsignado[] }>(`scheduling/horarios-asignados/?grupo=${selectedGrupo}&periodo=${selectedPeriodo}`);
+          const horariosResponse = await fetchData<{ results: Horario[] }>(`scheduling/horarios-asignados/?grupo=${selectedGrupo}&periodo=${selectedPeriodo}`);
           const horariosData = horariosResponse?.results ?? [];
           setHorarios(horariosData);
           // Reset selection form
@@ -870,24 +871,27 @@ const HorarioManual = () => {
                         <tr className="bg-gray-100 border-b">
                           <th className="p-3 text-left">Día</th>
                           <th className="p-3 text-left">Horario</th>
+                          <th className="p-3 text-left">Materia</th>
                           <th className="p-3 text-left">Docente</th>
                           <th className="p-3 text-left">Aula</th>
                           <th className="p-3 text-center">Acciones</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {horarios.map((horario) => {
+                        {horarios.map((horario: Horario) => {
                           const dia = diasSemana.find(d => d.id === horario.dia_semana);
                           const bloque = bloques.find(b => b.bloque_def_id === horario.bloque_horario);
                           const docente = docentes.find(d => d.docente_id === horario.docente);
-                          const aula = aulas.find(a => a.espacio_id=== horario.espacio);
+                          const aula = aulas.find(a => a.espacio_id === horario.espacio);
+                          const materia = materias.find(m => m.materia_id === horario.materia);
                           
                           return (
                             <tr key={horario.horario_id} className="border-b hover:bg-gray-50">
-                              <td className="p-3">{dia?.nombre || `ID: ${horario.dia_semana}`}</td>
-                              <td className="p-3">{bloque ? `${bloque.hora_inicio} - ${bloque.hora_fin}` : `ID: ${horario.bloque_horario}`}</td>
-                              <td className="p-3">{docente ? `${docente.nombres} ${docente.apellidos}` : `ID: ${horario.docente}`}</td>
-                              <td className="p-3">{aula ? aula.nombre_espacio : `ID: ${horario.espacio}`}</td>
+                              <td className="p-3">{dia?.nombre || `Día ID: ${horario.dia_semana}`}</td>
+                              <td className="p-3">{bloque ? `${bloque.hora_inicio} - ${bloque.hora_fin}` : `Bloque ID: ${horario.bloque_horario}`}</td>
+                              <td className="p-3">{materia?.nombre_materia || `Materia ID: ${horario.materia}`}</td>
+                              <td className="p-3">{docente ? `${docente.nombres} ${docente.apellidos}` : `Docente ID: ${horario.docente}`}</td>
+                              <td className="p-3">{aula?.nombre_espacio || `Aula ID: ${horario.espacio}`}</td>
                               <td className="p-3 text-center">
                                 <Button 
                                   variant="ghost" 
