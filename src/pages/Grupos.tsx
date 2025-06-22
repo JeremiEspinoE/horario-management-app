@@ -12,7 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface Carrera {
   carrera_id: number;
@@ -116,6 +117,7 @@ const Grupos = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [currentGrupo, setCurrentGrupo] = useState<Grupo | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [pagination, setPagination] = useState({ count: 0, page: 1, pageSize: 10 });
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -131,6 +133,20 @@ const Grupos = () => {
   });
   
   const carreraId = form.watch("carrera");
+  
+  const loadGrupos = async (page: number) => {
+    setIsLoading(true);
+    try {
+      const response = await fetchData<{ results: Grupo[], count: number }>(`scheduling/grupos/?page=${page}`);
+      setGrupos(response.results || []);
+      setPagination(prev => ({ ...prev, count: response.count || 0, page }));
+    } catch (error) {
+      console.error("Error cargando grupos:", error);
+      toast.error("Error al cargar los grupos");
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
   // Update materias when carrera changes
   useEffect(() => {
@@ -161,52 +177,57 @@ const Grupos = () => {
     }
   }, [carreraId]);
 
+  const loadMateriasPorCarrera = async (carreraId: number) => {
+    if (!carreraId || carreraId <= 0) {
+      setMateriasFiltradas([]);
+      return;
+    }
+    try {
+      // Endpoint corregido para usar la ruta anidada correcta
+      const response = await fetchData<{ results: Materia[] }>(`academic-setup/carreras/${carreraId}/materias/`);
+      if (response && response.results) {
+        setMateriasFiltradas(response.results);
+      } else {
+        setMateriasFiltradas([]);
+      }
+    } catch (error) {
+      console.error("[Grupos] Error cargando materias por carrera:", error);
+      setMateriasFiltradas([]);
+    }
+  };
+
   useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
+    // Carga los datos principales de los grupos
+    loadGrupos(pagination.page);
+
+    // Carga los datos auxiliares una sola vez
+    const loadAuxData = async () => {
       try {
-        // Cargar grupos
-        const gruposResponse = await fetchData<{ results: Grupo[] }>("scheduling/grupos/");
-        const gruposData = gruposResponse.results || [];
+        const [carrerasResponse, materiasResponse, periodosResponse, docentesResponse] = await Promise.all([
+          fetchData<{ results: Carrera[] }>("academic-setup/carreras/"),
+          fetchData<{ results: Materia[] }>("academic-setup/materias/"),
+          fetchData<{ results: PeriodoAcademico[] }>("academic-setup/periodos-academicos/"),
+          fetchData<{ results: Docente[] }>("users/docentes/")
+        ]);
         
-        // Load carreras
-        const carrerasResponse = await fetchData<{ results: Carrera[] }>("academic-setup/carreras/");
-        const carrerasData = carrerasResponse.results || [];
-        
-        // Load materias
-        const materiasResponse = await fetchData<{ results: Materia[] }>("academic-setup/materias/");
-        const materiasData = materiasResponse.results || [];
-        console.log("[Grupos] Materias cargadas:", materiasData);
-        
-        // Load periodos
-        const periodosResponse = await fetchData<{ results: PeriodoAcademico[] }>("academic-setup/periodos-academicos/");
-        const periodosData = periodosResponse.results || [];
-        
-        // Load docentes
-        const docentesResponse = await fetchData<{ results: Docente[] }>("users/docentes/");
-        const docentesData = docentesResponse.results || [];
-        
-        setGrupos(gruposData);
-        setCarreras(carrerasData);
-        setMaterias(materiasData);
-        setPeriodos(periodosData);
-        setDocentes(docentesData);
-        
-        console.log("[Grupos] Datos cargados - Carreras:", carrerasData.length, "Materias:", materiasData.length);
+        setCarreras(carrerasResponse.results || []);
+        setMaterias(materiasResponse.results || []);
+        setPeriodos(periodosResponse.results || []);
+        setDocentes(docentesResponse.results || []);
       } catch (error) {
-        console.error("Error loading data:", error);
-        toast.error("Error al cargar los datos");
-      } finally {
-        setIsLoading(false);
+        console.error("Error loading aux data:", error);
+        toast.error("Error al cargar datos auxiliares");
       }
     };
 
-    loadData();
+    loadAuxData();
   }, []);
 
   const handleOpenModal = (grupo?: Grupo) => {
     if (grupo) {
       setCurrentGrupo(grupo);
+      // Cargar las materias de la carrera del grupo que se está editando
+      loadMateriasPorCarrera(grupo.carrera);
       form.reset({
         codigo_grupo: grupo.codigo_grupo,
         materias: grupo.materias,
@@ -218,6 +239,8 @@ const Grupos = () => {
       });
     } else {
       setCurrentGrupo(null);
+      // Limpiar las materias filtradas cuando se crea un nuevo grupo
+      setMateriasFiltradas([]);
       form.reset({
         codigo_grupo: "",
         materias: [],
@@ -246,30 +269,25 @@ const Grupos = () => {
     try {
       if (currentGrupo) {
         // Update existing grupo
-        const updated = await updateItem<Grupo>(
+        await updateItem<Grupo>(
           "scheduling/grupos/", 
           currentGrupo.grupo_id, 
           values
         );
-        
-        if (updated) {
-          setGrupos(grupos.map(g => g.grupo_id === currentGrupo.grupo_id ? updated : g));
-          toast.success("Grupo actualizado exitosamente");
-          handleCloseModal();
-        }
+        toast.success("Grupo actualizado exitosamente");
+        // Recargar la página actual
+        loadGrupos(pagination.page);
       } else {
         // Create new grupo
-        const created = await createItem<Grupo>(
+        await createItem<Grupo>(
           "scheduling/grupos/", 
           values
         );
-        
-        if (created) {
-          setGrupos([...grupos, created]);
-          toast.success("Grupo creado exitosamente");
-          handleCloseModal();
-        }
+        toast.success("Grupo creado exitosamente");
+        // Ir a la página 1 para ver el nuevo grupo
+        loadGrupos(1);
       }
+      handleCloseModal();
     } catch (error) {
       console.error("Error saving grupo:", error);
       toast.error("Error al guardar el grupo");
@@ -287,11 +305,10 @@ const Grupos = () => {
     if (!currentGrupo) return;
     
     try {
-      const success = await deleteItem("scheduling/grupos/", currentGrupo.grupo_id);
-      if (success) {
-        setGrupos(grupos.filter(g => g.grupo_id !== currentGrupo.grupo_id));
-        toast.success("Grupo eliminado exitosamente");
-      }
+      await deleteItem("scheduling/grupos/", currentGrupo.grupo_id);
+      toast.success("Grupo eliminado exitosamente");
+      // Recargar la página actual después de eliminar
+      loadGrupos(pagination.page);
     } catch (error) {
       console.error("Error deleting grupo:", error);
       toast.error("Error al eliminar el grupo");
@@ -363,6 +380,30 @@ const Grupos = () => {
         onEdit={handleOpenModal}
         onDelete={handleDelete}
       />
+
+      <div className="flex items-center justify-end space-x-2 py-4">
+        <span className="text-sm text-muted-foreground">
+          Página {pagination.page} de {Math.ceil(pagination.count / pagination.pageSize)}
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => loadGrupos(pagination.page - 1)}
+          disabled={pagination.page <= 1}
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Anterior
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => loadGrupos(pagination.page + 1)}
+          disabled={pagination.page >= Math.ceil(pagination.count / pagination.pageSize)}
+        >
+          Siguiente
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
 
       <FormModal
         isOpen={isModalOpen}

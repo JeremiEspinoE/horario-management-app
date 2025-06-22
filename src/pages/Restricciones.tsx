@@ -13,18 +13,16 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface Periodo {
-  id: number;
-  nombre: string;
-  fecha_inicio: string;
-  fecha_fin: string;
-  activo: boolean;
+  periodo_id: number;
+  nombre_periodo: string;
 }
 
 interface Restriccion {
-  id: number;
+  restriccion_id: number;
   codigo_restriccion: string;
   descripcion: string;
   tipo_aplicacion: string;
@@ -67,6 +65,8 @@ const Restricciones = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [currentRestriccion, setCurrentRestriccion] = useState<Restriccion | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [pagination, setPagination] = useState({ count: 0, page: 1, pageSize: 10 });
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -82,27 +82,37 @@ const Restricciones = () => {
     },
   });
 
+  const loadRestricciones = async (page: number) => {
+    setIsLoading(true);
+    try {
+      const data = await fetchData<PaginatedResponse<Restriccion>>(`scheduling/configuracion-restricciones/?page=${page}`);
+      if (data && data.results) {
+        setRestricciones(data.results);
+        setPagination({ count: data.count, page, pageSize: 10 });
+      }
+    } catch (error) {
+      toast.error("Error al cargar las restricciones.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Load data on component mount
   useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
-      
-      // Load restricciones
-      const restriccionesData = await fetchData<PaginatedResponse<Restriccion>>("scheduling/configuracion-restricciones/");
-      if (restriccionesData && restriccionesData.results) {
-        setRestricciones(restriccionesData.results);
+    loadRestricciones(1);
+
+    const loadPeriodos = async () => {
+      try {
+        const periodosData = await fetchData<PaginatedResponse<Periodo>>("academic-setup/periodos-academicos/");
+        if (periodosData && periodosData.results) {
+          setPeriodos(periodosData.results);
+        }
+      } catch (error) {
+        toast.error("Error al cargar los períodos.");
       }
-      
-      // Load periodos
-      const periodosData = await fetchData<PaginatedResponse<Periodo>>("academic-setup/periodos-academicos/");
-      if (periodosData && periodosData.results) {
-        setPeriodos(periodosData.results);
-      }
-      
-      setIsLoading(false);
     };
     
-    loadData();
+    loadPeriodos();
   }, []);
 
   const handleOpenModal = (restriccion?: Restriccion) => {
@@ -127,7 +137,7 @@ const Restricciones = () => {
         entidad_id_1: undefined,
         entidad_id_2: undefined,
         valor_parametro: undefined,
-        periodo_aplicable: periodos.length > 0 ? periodos[0].id : 0,
+        periodo_aplicable: periodos.length > 0 ? periodos[0].periodo_id : 0,
         esta_activa: true,
       });
     }
@@ -143,31 +153,33 @@ const Restricciones = () => {
     const isValid = await form.trigger();
     if (!isValid) return;
 
+    setIsSaving(true);
     const values = form.getValues();
     
-    if (currentRestriccion) {
-      // Update existing restriccion
-      const updated = await updateItem<Restriccion>(
-        "scheduling/configuracion-restricciones/", 
-        currentRestriccion.id, 
-        values
-      );
-      
-      if (updated) {
-        setRestricciones(restricciones.map(r => r.id === currentRestriccion.id ? updated : r));
-        handleCloseModal();
+    try {
+      if (currentRestriccion) {
+        // Update existing restriccion
+        await updateItem<Restriccion>(
+          "scheduling/configuracion-restricciones/", 
+          currentRestriccion.restriccion_id, 
+          values
+        );
+        toast.success("Restricción actualizada exitosamente.");
+        loadRestricciones(pagination.page);
+      } else {
+        // Create new restriccion
+        await createItem<Restriccion>(
+          "scheduling/configuracion-restricciones/", 
+          values
+        );
+        toast.success("Restricción creada exitosamente.");
+        loadRestricciones(1);
       }
-    } else {
-      // Create new restriccion
-      const created = await createItem<Restriccion>(
-        "scheduling/configuracion-restricciones/", 
-        values
-      );
-      
-      if (created) {
-        setRestricciones([...restricciones, created]);
-        handleCloseModal();
-      }
+      handleCloseModal();
+    } catch (error) {
+      toast.error("Error al guardar la restricción.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -179,10 +191,13 @@ const Restricciones = () => {
   const confirmDelete = async () => {
     if (!currentRestriccion) return;
     
-    const success = await deleteItem("scheduling/configuracion-restricciones/", currentRestriccion.id);
-    
-    if (success) {
-      setRestricciones(restricciones.filter(r => r.id !== currentRestriccion.id));
+    try {
+      await deleteItem("scheduling/configuracion-restricciones/", currentRestriccion.restriccion_id);
+      toast.success("Restricción eliminada exitosamente.");
+      loadRestricciones(pagination.page);
+    } catch (error) {
+      toast.error("Error al eliminar la restricción.");
+    } finally {
       setIsDeleteDialogOpen(false);
       setCurrentRestriccion(null);
     }
@@ -194,8 +209,8 @@ const Restricciones = () => {
   };
 
   const getPeriodoNombre = (periodoId: number): string => {
-    const periodo = periodos.find(p => p.id === periodoId);
-    return periodo ? periodo.nombre : "Desconocido";
+    const periodo = periodos.find(p => p.periodo_id === periodoId);
+    return periodo ? periodo.nombre_periodo : "Desconocido";
   };
 
   const columns = [
@@ -251,7 +266,7 @@ const Restricciones = () => {
 
       {isLoading ? (
         <div className="flex justify-center my-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-academic-primary"></div>
+          <Loader2 className="h-12 w-12 animate-spin text-academic-primary" />
         </div>
       ) : (
         <DataTable 
@@ -261,6 +276,30 @@ const Restricciones = () => {
           onDelete={handleDelete}
         />
       )}
+
+      <div className="flex items-center justify-end space-x-2 py-4">
+        <span className="text-sm text-muted-foreground">
+          Página {pagination.page} de {Math.ceil(pagination.count / pagination.pageSize)}
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => loadRestricciones(pagination.page - 1)}
+          disabled={pagination.page <= 1}
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Anterior
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => loadRestricciones(pagination.page + 1)}
+          disabled={pagination.page >= Math.ceil(pagination.count / pagination.pageSize)}
+        >
+          Siguiente
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
 
       {/* Form modal for creating/editing */}
       <FormModal
@@ -302,8 +341,8 @@ const Restricciones = () => {
                         </FormControl>
                         <SelectContent>
                           {periodos.map((periodo) => (
-                            <SelectItem key={periodo.id} value={periodo.id.toString()}>
-                              {periodo.nombre}
+                            <SelectItem key={periodo.periodo_id} value={periodo.periodo_id.toString()}>
+                              {periodo.nombre_periodo}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -430,7 +469,7 @@ const Restricciones = () => {
           </Form>
         }
         onSubmit={handleSave}
-        isSubmitting={form.formState.isSubmitting}
+        isSubmitting={isSaving}
       />
 
       {/* Confirmation dialog for deleting */}

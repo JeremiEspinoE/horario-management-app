@@ -12,6 +12,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
+import { Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface ApiResponse<T> {
   count: number;
@@ -83,6 +86,8 @@ const Docentes = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [currentDocente, setCurrentDocente] = useState<Docente | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [pagination, setPagination] = useState({ count: 0, page: 1, pageSize: 10 });
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -101,43 +106,42 @@ const Docentes = () => {
     },
   });
 
+  const loadDocentes = async (page: number) => {
+    setIsLoading(true);
+    try {
+      const response = await fetchData<ApiResponse<Docente>>(`users/docentes/?page=${page}`);
+      setDocentes(response.results || []);
+      setPagination(prev => ({ ...prev, count: response.count || 0, page }));
+    } catch (error) {
+      console.error("Error cargando docentes:", error);
+      toast.error("Error al cargar los docentes");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Load data on component mount
   useEffect(() => {
-    const loadData = async () => {
+    loadDocentes(pagination.page);
+
+    const loadAuxData = async () => {
       try {
-        setIsLoading(true);
+        const [unidadesData, usuariosData, especialidadesData] = await Promise.all([
+          fetchData<ApiResponse<UnidadAcademica>>("academic-setup/unidades-academicas/"),
+          fetchData<ApiResponse<Usuario>>("users/all/"),
+          fetchData<ApiResponse<Especialidad>>("academic-setup/especialidades/")
+        ]);
         
-        // Load docentes
-        const docentesData = await fetchData<ApiResponse<Docente>>("users/docentes/");
-        if (docentesData?.results) {
-          setDocentes(docentesData.results);
-        }
-      
-        // Load unidades
-        const unidadesData = await fetchData<ApiResponse<UnidadAcademica>>("academic-setup/unidades-academicas/");
-        if (unidadesData?.results) {
-          setUnidades(unidadesData.results);
-        }     
-        
-        // Load usuarios (para vincular)
-        const usuariosData = await fetchData<ApiResponse<Usuario>>("users/all/");
-        if (usuariosData?.results) {
-          setUsuarios(usuariosData.results);
-        }
-        
-        // Load especialidades
-        const especialidadesData = await fetchData<ApiResponse<Especialidad>>("academic-setup/especialidades/");
-        if (especialidadesData?.results) {
-          setEspecialidades(especialidadesData.results);
-        }
+        setUnidades(unidadesData?.results || []);
+        setUsuarios(usuariosData?.results || []);
+        setEspecialidades(especialidadesData?.results || []);
       } catch (error) {
-        console.error("Error loading data:", error);
-      } finally {
-        setIsLoading(false);
+        console.error("Error loading aux data:", error);
+        toast.error("Error al cargar datos auxiliares");
       }
     };
     
-    loadData();
+    loadAuxData();
   }, []);
 
   const handleOpenModal = (docente?: Docente) => {
@@ -184,31 +188,33 @@ const Docentes = () => {
     const isValid = await form.trigger();
     if (!isValid) return;
 
+    setIsSaving(true);
     const values = form.getValues();
     
-    if (currentDocente) {
-      // Update existing docente
-      const updated = await updateItem<Docente>(
-        "users/docentes/", 
-        currentDocente.docente_id, 
-        values
-      );
-      
-      if (updated) {
-        setDocentes(docentes.map(d => d.docente_id === currentDocente.docente_id ? updated : d));
-        handleCloseModal();
+    try {
+      if (currentDocente) {
+        // Update existing docente
+        await updateItem<Docente>(
+          "users/docentes/", 
+          currentDocente.docente_id, 
+          values
+        );
+        toast.success("Docente actualizado exitosamente.");
+        loadDocentes(pagination.page);
+      } else {
+        // Create new docente
+        await createItem<Docente>(
+          "users/docentes/", 
+          values
+        );
+        toast.success("Docente creado exitosamente.");
+        loadDocentes(1);
       }
-    } else {
-      // Create new docente
-      const created = await createItem<Docente>(
-        "users/docentes/", 
-        values
-      );
-      
-      if (created) {
-        setDocentes([...docentes, created]);
-        handleCloseModal();
-      }
+      handleCloseModal();
+    } catch (error) {
+      toast.error("Error al guardar el docente.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -220,10 +226,13 @@ const Docentes = () => {
   const confirmDelete = async () => {
     if (!currentDocente) return;
     
-    const success = await deleteItem("users/docentes/", currentDocente.docente_id);
-    
-    if (success) {
-      setDocentes(docentes.filter(d => d.docente_id !== currentDocente.docente_id));
+    try {
+      await deleteItem("users/docentes/", currentDocente.docente_id);
+      toast.success("Docente eliminado exitosamente.");
+      loadDocentes(pagination.page);
+    } catch (error) {
+      toast.error("Error al eliminar el docente.");
+    } finally {
       setIsDeleteDialogOpen(false);
       setCurrentDocente(null);
     }
@@ -290,6 +299,30 @@ const Docentes = () => {
           onDelete={handleDelete}
         />
       )}
+
+      <div className="flex items-center justify-end space-x-2 py-4">
+        <span className="text-sm text-muted-foreground">
+          Página {pagination.page} de {Math.ceil(pagination.count / pagination.pageSize)}
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => loadDocentes(pagination.page - 1)}
+          disabled={pagination.page <= 1}
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Anterior
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => loadDocentes(pagination.page + 1)}
+          disabled={pagination.page >= Math.ceil(pagination.count / pagination.pageSize)}
+        >
+          Siguiente
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
 
       {/* Form modal for creating/editing */}
       <FormModal

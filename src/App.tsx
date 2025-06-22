@@ -29,6 +29,7 @@ import HorarioManual from "./pages/HorarioManual";
 import HorarioAuto from "./pages/HorarioAuto";
 import ReportesHorarios from "./pages/ReportesHorarios";
 import Restricciones from "./pages/Restricciones";
+import Ciclos from "./pages/Ciclos";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -72,6 +73,7 @@ const App = () => (
                   <Route path="/admin/horarios/automatico" element={<HorarioAuto />} />
                   <Route path="/admin/reportes" element={<ReportesHorarios />} />
                   <Route path="/admin/restricciones" element={<Restricciones />} />
+                  <Route path="/admin/ciclos" element={<Ciclos />} />
                 </Route>
 
                 {/* Protected Teacher routes */}

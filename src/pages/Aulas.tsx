@@ -11,6 +11,9 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
+import { Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface UnidadAcademica {
   unidad_id: number;
@@ -50,6 +53,8 @@ const Aulas = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [currentAula, setCurrentAula] = useState<Aula | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [pagination, setPagination] = useState({ count: 0, page: 1, pageSize: 10 });
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -63,37 +68,40 @@ const Aulas = () => {
     },
   });
 
+  const loadAulas = async (page: number) => {
+    setIsLoading(true);
+    try {
+      const response = await fetchData<{ results: Aula[], count: number }>(`academic-setup/espacios-fisicos/?page=${page}`);
+      setAulas(response.results || []);
+      setPagination(prev => ({ ...prev, count: response.count || 0, page }));
+    } catch (error) {
+      console.error("Error cargando aulas:", error);
+      toast.error("Error al cargar las aulas");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Load data on component mount
   useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
-      
-      // Load aulas
-      const aulasData = await fetchData<{ count: number; next: string | null; previous: string | null; results: Aula[] }>("academic-setup/espacios-fisicos/");
-      if (aulasData && Array.isArray(aulasData.results)) {
-        setAulas(aulasData.results);
+    loadAulas(pagination.page);
+
+    const loadAuxData = async () => {
+      try {
+        const [unidadesData, tiposEspaciosData] = await Promise.all([
+          fetchData<{ results: UnidadAcademica[] }>("academic-setup/unidades-academicas/"),
+          fetchData<{ results: TipoEspacio[] }>("academic-setup/tipos-espacio/")
+        ]);
+        
+        setUnidades(unidadesData.results || []);
+        setTiposEspacios(tiposEspaciosData.results || []);
+      } catch (error) {
+        console.error("Error cargando datos auxiliares:", error);
+        toast.error("Error al cargar los datos auxiliares");
       }
-      
-      // Load unidades
-      const unidadesData = await fetchData<{ count: number; next: string | null; previous: string | null; results: UnidadAcademica[] }>("academic-setup/unidades-academicas/");
-      if (unidadesData && Array.isArray(unidadesData.results)) {
-        setUnidades(unidadesData.results);
-      } else {
-        setUnidades([]);
-      }
-      
-      // Load tipos de espacios
-      const tiposEspaciosData = await fetchData<{ count: number; next: string | null; previous: string | null; results: TipoEspacio[] }>("academic-setup/tipos-espacio/");
-      if (tiposEspaciosData && Array.isArray(tiposEspaciosData.results)) {
-        setTiposEspacios(tiposEspaciosData.results);
-      } else {
-        setTiposEspacios([]);
-      }
-      
-      setIsLoading(false);
     };
     
-    loadData();
+    loadAuxData();
   }, []);
 
   const handleOpenModal = (aula?: Aula) => {
@@ -130,31 +138,33 @@ const Aulas = () => {
     const isValid = await form.trigger();
     if (!isValid) return;
 
+    setIsSaving(true);
     const values = form.getValues();
     
-    if (currentAula) {
-      // Update existing aula
-      const updated = await updateItem<Aula>(
-        "academic-setup/espacios-fisicos/", 
-        currentAula.espacio_id, 
-        values
-      );
-      
-      if (updated) {
-        setAulas(aulas.map(a => a.espacio_id === currentAula.espacio_id ? updated : a));
-        handleCloseModal();
+    try {
+      if (currentAula) {
+        // Update existing aula
+        await updateItem<Aula>(
+          "academic-setup/espacios-fisicos/", 
+          currentAula.espacio_id, 
+          values
+        );
+        toast.success("Aula actualizada exitosamente.");
+        loadAulas(pagination.page);
+      } else {
+        // Create new aula
+        await createItem<Aula>(
+          "academic-setup/espacios-fisicos/", 
+          values
+        );
+        toast.success("Aula creada exitosamente.");
+        loadAulas(1);
       }
-    } else {
-      // Create new aula
-      const created = await createItem<Aula>(
-        "academic-setup/espacios-fisicos/", 
-        values
-      );
-      
-      if (created) {
-        setAulas([...aulas, created]);
-        handleCloseModal();
-      }
+      handleCloseModal();
+    } catch (error) {
+      toast.error("Error al guardar el aula.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -166,10 +176,13 @@ const Aulas = () => {
   const confirmDelete = async () => {
     if (!currentAula) return;
     
-    const success = await deleteItem("academic-setup/espacios-fisicos/", currentAula.espacio_id);
-    
-    if (success) {
-      setAulas(aulas.filter(a => a.espacio_id !== currentAula.espacio_id));
+    try {
+      await deleteItem("academic-setup/espacios-fisicos/", currentAula.espacio_id);
+      toast.success("Aula eliminada exitosamente.");
+      loadAulas(pagination.page);
+    } catch (error) {
+      toast.error("Error al eliminar el aula.");
+    } finally {
       setIsDeleteDialogOpen(false);
       setCurrentAula(null);
     }
@@ -221,6 +234,30 @@ const Aulas = () => {
           onDelete={handleDelete}
         />
       )}
+
+      <div className="flex items-center justify-end space-x-2 py-4">
+        <span className="text-sm text-muted-foreground">
+          Página {pagination.page} de {Math.ceil(pagination.count / pagination.pageSize)}
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => loadAulas(pagination.page - 1)}
+          disabled={pagination.page <= 1}
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Anterior
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => loadAulas(pagination.page + 1)}
+          disabled={pagination.page >= Math.ceil(pagination.count / pagination.pageSize)}
+        >
+          Siguiente
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
 
       {/* Form modal for creating/editing */}
       <FormModal

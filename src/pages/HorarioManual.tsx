@@ -767,7 +767,7 @@ const HorarioManual = () => {
                           const aula = aulas.find(a => a.espacio_id=== horario.espacio);
                           
                           return (
-                            <tr key={horario.bloque_horario} className="border-b hover:bg-gray-50">
+                            <tr key={horario.horario_id} className="border-b hover:bg-gray-50">
                               <td className="p-3">{dia?.nombre || `ID: ${horario.dia_semana}`}</td>
                               <td className="p-3">{bloque ? `${bloque.hora_inicio} - ${bloque.hora_fin}` : `ID: ${horario.bloque_horario}`}</td>
                               <td className="p-3">{docente ? `${docente.nombres} ${docente.apellidos}` : `ID: ${horario.docente}`}</td>
@@ -776,7 +776,7 @@ const HorarioManual = () => {
                                 <Button 
                                   variant="ghost" 
                                   size="sm"
-                                  onClick={() => handleDeleteHorario(horario.bloque_horario)}
+                                  onClick={() => handleDeleteHorario(horario.horario_id)}
                                   className="text-red-500 hover:text-red-700 hover:bg-red-50"
                                 >
                                   Eliminar

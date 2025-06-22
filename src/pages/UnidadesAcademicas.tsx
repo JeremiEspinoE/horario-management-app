@@ -12,6 +12,8 @@ import PageHeader from "@/components/PageHeader";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 // Define the shape of a unidad académica
 interface UnidadAcademica {
@@ -33,6 +35,8 @@ const UnidadesAcademicas = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [currentUnidad, setCurrentUnidad] = useState<UnidadAcademica | null>(null);
   const navigate = useNavigate();
+  const [isSaving, setIsSaving] = useState(false);
+  const [pagination, setPagination] = useState({ count: 0, page: 1, pageSize: 10 });
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -44,16 +48,22 @@ const UnidadesAcademicas = () => {
 
   // Load unidades on component mount
   useEffect(() => {
-    loadUnidades();
+    loadUnidades(1);
   }, []);
 
-  const loadUnidades = async () => {
+  const loadUnidades = async (page: number) => {
     setIsLoading(true);
-    const data = await fetchData<{ count: number; next: string | null; previous: string | null; results: UnidadAcademica[] }>("academic-setup/unidades-academicas/");
-    if (data && Array.isArray(data.results)) {
-      setUnidades(data.results);
+    try {
+      const data = await fetchData<{ count: number; next: string | null; previous: string | null; results: UnidadAcademica[] }>(`academic-setup/unidades-academicas/?page=${page}`);
+      if (data && Array.isArray(data.results)) {
+        setUnidades(data.results);
+        setPagination({ count: data.count, page, pageSize: 10 });
+      }
+    } catch (error) {
+      toast.error("Error al cargar las unidades académicas.");
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const handleOpenModal = (unidad?: UnidadAcademica) => {
@@ -82,35 +92,38 @@ const UnidadesAcademicas = () => {
   const isValid = await form.trigger();
   if (!isValid) return;
 
+  setIsSaving(true);
   const values = form.getValues();
 
-  if (currentUnidad) {
-    if (!currentUnidad.unidad_id) {
-      toast.error("ID de la unidad académica no está definido.");
-      return;
+  try {
+    if (currentUnidad) {
+      if (!currentUnidad.unidad_id) {
+        toast.error("ID de la unidad académica no está definido.");
+        setIsSaving(false);
+        return;
+      }
+      // Update existing unidad
+      await updateItem<UnidadAcademica>(
+        "academic-setup/unidades-academicas/",
+        currentUnidad.unidad_id,
+        values
+      );
+      toast.success("Unidad académica actualizada exitosamente.");
+      loadUnidades(pagination.page);
+    } else {
+      // Create new unidad
+      await createItem<UnidadAcademica>(
+        "academic-setup/unidades-academicas/",
+        values
+      );
+      toast.success("Unidad académica creada exitosamente.");
+      loadUnidades(1);
     }
-    // Update existing unidad
-    const updated = await updateItem<UnidadAcademica>(
-      "academic-setup/unidades-academicas/",
-      currentUnidad.unidad_id,
-      values
-    );
-
-    if (updated) {
-      setUnidades(unidades.map(u => u.unidad_id === currentUnidad.unidad_id ? updated : u));
-      handleCloseModal();
-    }
-  } else {
-    // Create new unidad
-    const created = await createItem<UnidadAcademica>(
-      "academic-setup/unidades-academicas/",
-      values
-    );
-
-    if (created) {
-      setUnidades([...unidades, created]);
-      handleCloseModal();
-    }
+    handleCloseModal();
+  } catch (error) {
+    toast.error("Error al guardar la unidad académica.");
+  } finally {
+    setIsSaving(false);
   }
 };
   const handleDelete = (unidad: UnidadAcademica) => {
@@ -121,10 +134,13 @@ const UnidadesAcademicas = () => {
   const confirmDelete = async () => {
     if (!currentUnidad) return;
     
-    const success = await deleteItem("academic-setup/unidades-academicas/", currentUnidad.unidad_id);
-    
-    if (success) {
-      setUnidades(unidades.filter(u => u.unidad_id !== currentUnidad.unidad_id));
+    try {
+      await deleteItem("academic-setup/unidades-academicas/", currentUnidad.unidad_id);
+      toast.success("Unidad académica eliminada exitosamente.");
+      loadUnidades(pagination.page);
+    } catch (error) {
+      toast.error("Error al eliminar la unidad académica.");
+    } finally {
       setIsDeleteDialogOpen(false);
       setCurrentUnidad(null);
     }
@@ -135,7 +151,7 @@ const UnidadesAcademicas = () => {
   };
 
   const columns = [
-    { key: "id", header: "ID" },
+    { key: "unidad_id", header: "ID" },
     { key: "nombre_unidad", header: "Nombre" },
     { key: "descripcion", header: "Descripción" },
     { 
@@ -172,6 +188,30 @@ const UnidadesAcademicas = () => {
           onDelete={handleDelete}
         />
       )}
+
+      <div className="flex items-center justify-end space-x-2 py-4">
+        <span className="text-sm text-muted-foreground">
+          Página {pagination.page} de {Math.ceil(pagination.count / pagination.pageSize)}
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => loadUnidades(pagination.page - 1)}
+          disabled={pagination.page <= 1}
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Anterior
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => loadUnidades(pagination.page + 1)}
+          disabled={pagination.page >= Math.ceil(pagination.count / pagination.pageSize)}
+        >
+          Siguiente
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
 
       {/* Form modal for creating/editing */}
       <FormModal
@@ -211,7 +251,7 @@ const UnidadesAcademicas = () => {
           </Form>
         }
         onSubmit={handleSave}
-        isSubmitting={form.formState.isSubmitting}
+        isSubmitting={isSaving}
       />
 
       {/* Confirmation dialog for deleting */}

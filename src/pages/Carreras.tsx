@@ -12,7 +12,7 @@ import PageHeader from "@/components/PageHeader";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface UnidadAcademica {
   unidad_id: number;
@@ -52,6 +52,8 @@ const Carreras = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [currentCarrera, setCurrentCarrera] = useState<Carrera | null>(null);
   const navigate = useNavigate();
+  const [isSaving, setIsSaving] = useState(false);
+  const [pagination, setPagination] = useState({ count: 0, page: 1, pageSize: 10 });
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -63,6 +65,23 @@ const Carreras = () => {
     },
   });
 
+  const loadCarreras = async (page: number) => {
+    if (!unidadId) return;
+    setIsLoading(true);
+    try {
+      const carrerasData = await fetchData<ApiResponse<Carrera>>(
+        `academic-setup/carreras/?unidad=${unidadId}&page=${page}`
+      );
+      setCarreras(carrerasData.results || []);
+      setPagination(prev => ({ ...prev, count: carrerasData.count || 0, page }));
+    } catch (error) {
+      console.error("Error cargando carreras:", error);
+      toast.error("Error al cargar las carreras");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Load unidad and carreras on component mount
   useEffect(() => {
     if (!unidadId) {
@@ -70,36 +89,33 @@ const Carreras = () => {
       return;
     }
     
-    const loadData = async () => {
-      setIsLoading(true);
-      
-      // Load unidad details
-      const unidadData = await getItemById<UnidadAcademica>(
-        "academic-setup/unidades-academicas/", 
-        unidadId
-      );
-      
-      if (unidadData) {
-        setUnidad(unidadData);
-      } else {
+    const loadUnidad = async () => {
+      try {
+        const unidadData = await getItemById<UnidadAcademica>(
+          "academic-setup/unidades-academicas/",
+          unidadId
+        );
+        if (unidadData) {
+          setUnidad(unidadData);
+        } else {
+          toast.error("Unidad académica no encontrada.");
+          navigate("/admin/unidades");
+        }
+      } catch (error) {
+        toast.error("Error al cargar la unidad académica.");
         navigate("/admin/unidades");
-        return;
       }
-      
-      // Load carreras for this unidad
-      const carrerasData = await fetchData<{ count: number; next: string | null; previous: string | null; results: Carrera[] }>(
-        `academic-setup/carreras/?unidad=${unidadId}`
-      );
-      
-      if (carrerasData && Array.isArray(carrerasData.results)) {
-        setCarreras(carrerasData.results);
-      }
-      
-      setIsLoading(false);
     };
     
-    loadData();
+    loadUnidad();
+    loadCarreras(pagination.page);
   }, [unidadId, navigate]);
+
+  useEffect(() => {
+    if (unidadId) {
+      loadCarreras(1);
+    }
+  }, [unidadId]);
 
   const handleOpenModal = (carrera?: Carrera) => {
     if (carrera) {
@@ -131,31 +147,33 @@ const Carreras = () => {
     const isValid = await form.trigger();
     if (!isValid) return;
 
+    setIsSaving(true);
     const values = form.getValues();
     
-    if (currentCarrera) {
-      // Update existing carrera
-      const updated = await updateItem<Carrera>(
-        "academic-setup/carreras/", 
-        currentCarrera.carrera_id, 
-        values
-      );
-      
-      if (updated) {
-        setCarreras(carreras.map(c => c.carrera_id === currentCarrera.carrera_id ? updated : c));
-        handleCloseModal();
+    try {
+      if (currentCarrera) {
+        // Update existing carrera
+        await updateItem<Carrera>(
+          "academic-setup/carreras/", 
+          currentCarrera.carrera_id, 
+          values
+        );
+        toast.success("Carrera actualizada exitosamente.");
+        loadCarreras(pagination.page);
+      } else {
+        // Create new carrera
+        await createItem<Carrera>(
+          "academic-setup/carreras/", 
+          values
+        );
+        toast.success("Carrera creada exitosamente.");
+        loadCarreras(1);
       }
-    } else {
-      // Create new carrera
-      const created = await createItem<Carrera>(
-        "academic-setup/carreras/", 
-        values
-      );
-      
-      if (created) {
-        setCarreras([...carreras, created]);
-        handleCloseModal();
-      }
+      handleCloseModal();
+    } catch (error) {
+      toast.error("Error al guardar la carrera.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -167,10 +185,13 @@ const Carreras = () => {
   const confirmDelete = async () => {
     if (!currentCarrera) return;
     
-    const success = await deleteItem("academic-setup/carreras/", currentCarrera.carrera_id);
-    
-    if (success) {
-      setCarreras(carreras.filter(c => c.carrera_id !== currentCarrera.carrera_id));
+    try {
+      await deleteItem("academic-setup/carreras/", currentCarrera.carrera_id);
+      toast.success("Carrera eliminada exitosamente.");
+      loadCarreras(pagination.page);
+    } catch (error) {
+      toast.error("Error al eliminar la carrera.");
+    } finally {
       setIsDeleteDialogOpen(false);
       setCurrentCarrera(null);
     }
@@ -229,6 +250,30 @@ const Carreras = () => {
           onDelete={handleDelete}
         />
       )}
+
+      <div className="flex items-center justify-end space-x-2 py-4">
+        <span className="text-sm text-muted-foreground">
+          Página {pagination.page} de {Math.ceil(pagination.count / pagination.pageSize)}
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => loadCarreras(pagination.page - 1)}
+          disabled={pagination.page <= 1}
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Anterior
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => loadCarreras(pagination.page + 1)}
+          disabled={pagination.page >= Math.ceil(pagination.count / pagination.pageSize)}
+        >
+          Siguiente
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
 
       {/* Form modal for creating/editing */}
       <FormModal
@@ -292,7 +337,7 @@ const Carreras = () => {
           </Form>
         }
         onSubmit={handleSave}
-        isSubmitting={form.formState.isSubmitting}
+        isSubmitting={isSaving}
       />
 
       {/* Confirmation dialog for deleting */}
