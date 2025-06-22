@@ -246,16 +246,38 @@ const HorarioManual = () => {
     }
   }, [selectedCarrera, selectedPeriodo]);
   
+  // Helper function to fetch all paginated data
+  const fetchAllPaginatedData = async <T,>(url: string): Promise<T[]> => {
+    const items: T[] = [];
+    let nextUrl: string | null = url;
+    while (nextUrl) {
+      try {
+        const response = await client.get(nextUrl);
+        items.push(...response.data.results);
+        nextUrl = response.data.next;
+        if (nextUrl) {
+          // Convert absolute URL to relative path for the next request
+          const urlObject = new URL(nextUrl);
+          nextUrl = urlObject.pathname.replace('/api/', '') + urlObject.search;
+        }
+      } catch (error) {
+        console.error(`Error fetching paginated data from ${nextUrl}:`, error);
+        break;
+      }
+    }
+    return items;
+  };
+
   // Load aulas, docentes, and existing horarios when unidad and grupo are selected
   useEffect(() => {
     if (selectedUnidad && selectedGrupo && selectedPeriodo) {
       const loadAsignacionData = async () => {
         setIsLoading(true);
         try {
-          // Load classrooms for this unit (respuesta paginada)
-          const aulasResponse = await fetchData<{ results: Aula[] }>(`academic-setup/espacios-fisicos/?unidad=${selectedUnidad}`);
-          const aulasData = aulasResponse?.results ?? [];
-          setAulas(aulasData);
+          // Load ALL classrooms for this unit
+          const allAulas = await fetchAllPaginatedData<Aula>(`academic-setup/espacios-fisicos/?unidad=${selectedUnidad}`);
+          setAulas(allAulas);
+          
           // Load teachers for this unit (respuesta paginada)
           const docentesResponse = await fetchData<{ results: Docente[] }>(`users/docentes/?unidad_principal=${selectedUnidad}`);
           const docentesData = docentesResponse?.results ?? [];
@@ -526,6 +548,21 @@ const HorarioManual = () => {
   
   console.log("Docentes en el select:", docentes);
 
+  // Filtrar aulas según el tipo de espacio requerido por la materia seleccionada
+  const materiaSeleccionada = materiasGrupo.find(m => m.materia_id === selectedMateria);
+  const tipoEspacioRequerido = materiaSeleccionada?.requiere_tipo_espacio_especifico;
+
+  console.log("Materia seleccionada:", materiaSeleccionada);
+  console.log("Tipo de espacio requerido (ID):", tipoEspacioRequerido);
+  console.log("Aulas disponibles (antes de filtrar):", aulas);
+
+  const aulasFiltradas = aulas.filter(aula => {
+    if (!tipoEspacioRequerido) {
+      return true; // Si no se requiere tipo, mostrar todas
+    }
+    return Number(aula.tipo_espacio) === Number(tipoEspacioRequerido);
+  });
+
   return (
     <div className="container mx-auto py-6">
       <PageHeader 
@@ -725,15 +762,16 @@ const HorarioManual = () => {
                   <div className="grid md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="aula">Aula</Label>
-                      <Select 
+                      <Select
                         value={selectedAula?.toString() || ""}
                         onValueChange={(value) => setSelectedAula(Number(value))}
+                        disabled={aulasFiltradas.length === 0}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar aula" />
+                          <SelectValue placeholder={aulasFiltradas.length === 0 ? "No hay aulas disponibles" : "Seleccionar aula"} />
                         </SelectTrigger>
                         <SelectContent>
-                          {aulas.map((aula) => (
+                          {aulasFiltradas.map((aula) => (
                             <SelectItem key={aula.espacio_id} value={aula.espacio_id.toString()}>
                               {aula.nombre_espacio} (Cap: {aula.capacidad})
                             </SelectItem>
