@@ -109,6 +109,16 @@ interface DisponibilidadDocente {
   dia_semana: number;
   bloque_horario: number;
   esta_disponible: boolean;
+  bloque_horario_detalle?: {
+    bloque_def_id: number;
+    nombre_bloque: string;
+    hora_inicio: string;
+    hora_fin: string;
+    turno: string;
+    turno_display: string;
+    dia_semana: number;
+    dia_semana_display: string;
+  };
 }
 
 const diasSemana = [
@@ -147,6 +157,9 @@ const HorarioManual = () => {
   
   const [isSaving, setIsSaving] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  
+  const [selectedMateria, setSelectedMateria] = useState<number | null>(null);
+  const [materiasGrupo, setMateriasGrupo] = useState<MateriaDetalle[]>([]);
   
   // Load initial data
   useEffect(() => {
@@ -271,18 +284,12 @@ const HorarioManual = () => {
   // Load teacher availability when teacher and period are selected
   useEffect(() => {
     if (selectedDocente && selectedPeriodo) {
-      const loadDisponibilidad = async () => {
-        try {
-          // Load disponibilidad (respuesta paginada)
-          const disponibilidadResponse = await fetchData<{ results: DisponibilidadDocente[] }>(`scheduling/disponibilidad-docentes/?docente=${selectedDocente}&periodo=${selectedPeriodo}`);
-          const disponibilidadData = disponibilidadResponse?.results ?? [];
-          setDisponibilidadDocentes(disponibilidadData);
-        } catch (error) {
-          console.error("Error loading teacher availability:", error);
-          toast.error("Error al cargar la disponibilidad del docente");
-        }
-      };
-      loadDisponibilidad();
+      fetch(`http://localhost:8000/api/scheduling/disponibilidad-docentes/?docente=${selectedDocente}&periodo=${selectedPeriodo}`)
+        .then(res => res.json())
+        .then(data => {
+          console.log("Respuesta de disponibilidad:", data);
+          setDisponibilidadDocentes(data); // data es el array plano
+        });
     }
   }, [selectedDocente, selectedPeriodo]);
   
@@ -328,6 +335,50 @@ const HorarioManual = () => {
     // Solo cuando cambian los horarios
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [horarios]);
+  
+  // Cuando se selecciona un grupo, cargar materias del grupo
+  useEffect(() => {
+    if (selectedGrupo) {
+      const grupo = grupos.find(g => g.grupo_id === selectedGrupo);
+      setMateriasGrupo(grupo?.materias_detalle || []);
+      setSelectedMateria(null);
+      setDocentes([]); // Limpiar docentes hasta que se seleccione materia
+    }
+  }, [selectedGrupo]);
+
+  // Cuando se selecciona una materia, cargar docentes válidos para esa materia y resetear el docente seleccionado
+  useEffect(() => {
+    if (selectedMateria) {
+      setSelectedDocente(null);
+      fetch(`http://localhost:8000/api/users/docentes/por-materia/?materia_id=${selectedMateria}`)
+        .then(res => res.json())
+        .then(data => {
+          console.log("Respuesta cruda de docentes:", data);
+          setDocentes(data);
+        });
+    } else {
+      setDocentes([]);
+      setSelectedDocente(null);
+    }
+  }, [selectedMateria]);
+  
+  // Resetear bloque seleccionado al cambiar de docente o día
+  useEffect(() => {
+    setSelectedBloque(null);
+  }, [selectedDocente, selectedDia]);
+
+  console.log("selectedDocente:", selectedDocente, typeof selectedDocente);
+  console.log("selectedDia:", selectedDia, typeof selectedDia);
+  console.log("disponibilidadDocentes:", disponibilidadDocentes);
+
+  const bloquesDisponibles = disponibilidadDocentes
+    .filter(d =>
+      Number(d.docente) === Number(selectedDocente) &&
+      Number(d.dia_semana) === Number(selectedDia) &&
+      d.esta_disponible &&
+      (d as any).bloque_horario_detalle
+    )
+    .map(d => (d as any).bloque_horario_detalle);
   
   const getMateriaPorGrupo = (grupoId: number): MateriaDetalle | undefined => {
     const grupo = grupos.find(g => g.grupo_id === grupoId);
@@ -429,6 +480,7 @@ const HorarioManual = () => {
     try {
       const nuevaAsignacion = {
         grupo: selectedGrupo,
+        materia: selectedMateria,
         docente: selectedDocente,
         espacio: selectedAula,
         periodo: selectedPeriodo,
@@ -472,6 +524,8 @@ const HorarioManual = () => {
     }
   };
   
+  console.log("Docentes en el select:", docentes);
+
   return (
     <div className="container mx-auto py-6">
       <PageHeader 
@@ -628,13 +682,34 @@ const HorarioManual = () => {
                 <div className="space-y-4">
                   <div className="grid md:grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="docente">Docente</Label>
-                      <Select 
-                        value={selectedDocente?.toString() || ""}
-                        onValueChange={(value) => setSelectedDocente(Number(value))}
+                      <Label htmlFor="materia">Materia</Label>
+                      <Select
+                        value={selectedMateria?.toString() || ""}
+                        onValueChange={value => setSelectedMateria(Number(value))}
+                        disabled={!selectedGrupo}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar docente" />
+                          <SelectValue placeholder="Seleccionar materia" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {materiasGrupo.map(materia => (
+                            <SelectItem key={materia.materia_id} value={materia.materia_id.toString()}>
+                              {materia.nombre_materia}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="docente">Docente</Label>
+                      <Select
+                        value={selectedDocente?.toString() || ""}
+                        onValueChange={(value) => setSelectedDocente(Number(value))}
+                        disabled={!selectedMateria || docentes.length === 0}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={docentes.length === 0 ? "No hay docentes válidos" : "Seleccionar docente"} />
                         </SelectTrigger>
                         <SelectContent>
                           {docentes.map((docente) => (
@@ -645,7 +720,9 @@ const HorarioManual = () => {
                         </SelectContent>
                       </Select>
                     </div>
-                    
+                  </div>
+                  
+                  <div className="grid md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="aula">Aula</Label>
                       <Select 
@@ -664,9 +741,7 @@ const HorarioManual = () => {
                         </SelectContent>
                       </Select>
                     </div>
-                  </div>
-                  
-                  <div className="grid md:grid-cols-2 gap-4">
+                    
                     <div>
                       <Label htmlFor="dia">Día</Label>
                       <Select 
@@ -685,18 +760,21 @@ const HorarioManual = () => {
                         </SelectContent>
                       </Select>
                     </div>
-                    
+                  </div>
+                  
+                  <div className="grid md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="bloque">Bloque Horario</Label>
-                      <Select 
+                      <Select
                         value={selectedBloque?.toString() || ""}
                         onValueChange={(value) => setSelectedBloque(Number(value))}
+                        disabled={!selectedDocente || !selectedDia || bloquesDisponibles.length === 0}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar bloque" />
+                          <SelectValue placeholder={bloquesDisponibles.length === 0 ? "No hay bloques disponibles" : "Seleccionar bloque"} />
                         </SelectTrigger>
                         <SelectContent>
-                          {bloques.map((bloque) => (
+                          {bloquesDisponibles.map((bloque) => (
                             <SelectItem key={bloque.bloque_def_id} value={bloque.bloque_def_id.toString()}>
                               {bloque.hora_inicio} - {bloque.hora_fin}
                             </SelectItem>
