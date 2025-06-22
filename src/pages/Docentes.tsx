@@ -10,6 +10,8 @@ import PageHeader from "@/components/PageHeader";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MultiSelect } from "@/components/ui/multi-select";
+import { Badge } from "@/components/ui/badge";
 
 interface ApiResponse<T> {
   count: number;
@@ -33,12 +35,12 @@ interface Usuario {
 
 interface Especialidad {
   especialidad_id: number;
-  nombre: string;
+  nombre_especialidad: string;
 }
 
 interface Docente {
   docente_id: number;
-  usuario: number;
+  usuario: number | null;
   codigo_docente: string;
   nombres: string;
   apellidos: string;
@@ -53,7 +55,7 @@ interface Docente {
 
 // Schema for form validation
 const formSchema = z.object({
-  usuario: z.number().optional(),
+  usuario: z.number().optional().nullable(),
   codigo_docente: z.string().min(1, "El código es obligatorio"),
   nombres: z.string().min(1, "Los nombres son obligatorios"),
   apellidos: z.string().min(1, "Los apellidos son obligatorios"),
@@ -62,12 +64,8 @@ const formSchema = z.object({
   telefono: z.string().optional(),
   tipo_contrato: z.string().min(1, "El tipo de contrato es obligatorio"),
   max_horas_semanales: z.coerce.number().min(1, "Las horas semanales son obligatorias"),
-  unidad_principal: z.number(),
-    especialidades_detalle: z.array(z.object({
-    especialidad_id: z.number(),
-    nombre_especialidad: z.string(),
-    descripcion: z.string()
-  }))
+  unidad_principal: z.number({ required_error: "La unidad académica es obligatoria." }),
+  especialidades: z.array(z.number()).optional(), // Se enviarán los IDs de las especialidades
 });
 
 const tiposContrato = [
@@ -99,7 +97,7 @@ const Docentes = () => {
       tipo_contrato: "TC",
       max_horas_semanales: 40,
       unidad_principal: undefined,
-      especialidades_detalle: [],
+      especialidades: [],
     },
   });
 
@@ -156,7 +154,7 @@ const Docentes = () => {
         tipo_contrato: docente.tipo_contrato || "TC",
         max_horas_semanales: docente.max_horas_semanales,
         unidad_principal: docente.unidad_principal || undefined,
-        especialidades_detalle: docente.especialidades_detalle || [],
+        especialidades: docente.especialidades_detalle.map(e => e.especialidad_id) || [],
       });
     } else {
       setCurrentDocente(null);
@@ -171,7 +169,7 @@ const Docentes = () => {
         tipo_contrato: "TC",
         max_horas_semanales: 40,
         unidad_principal: undefined,
-        especialidades_detalle: [],
+        especialidades: [],
       });
     }
     setIsModalOpen(true);
@@ -249,16 +247,26 @@ const Docentes = () => {
     { 
       key: "tipo_contrato", 
       header: "Tipo contrato",
-      render: (row: Docente) => {
-        const tipoContrato = tiposContrato.find(tc => tc.value === row.tipo_contrato);
-        return tipoContrato ? tipoContrato.label : row.tipo_contrato;
-      }
+      render: (row: Docente) => tiposContrato.find(t => t.value === row.tipo_contrato)?.label || row.tipo_contrato
     },
     { key: "max_horas_semanales", header: "Máx. horas" },
     { 
       key: "unidad_principal", 
       header: "Unidad académica",
       render: (row: Docente) => getUnidadNombre(row.unidad_principal)
+    },
+    {
+      key: "especialidades",
+      header: "Especialidades",
+      render: (row: Docente) => (
+        <div className="flex flex-wrap gap-1">
+          {row.especialidades_detalle.map(e => (
+            <Badge key={e.especialidad_id} variant="secondary">
+              {e.nombre_especialidad}
+            </Badge>
+          ))}
+        </div>
+      )
     },
   ];
 
@@ -467,6 +475,25 @@ const Docentes = () => {
                         ))}
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="especialidades"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Especialidades</FormLabel>
+                    <FormControl>
+                      <MultiSelect
+                        options={especialidades.map(e => ({ value: String(e.especialidad_id), label: e.nombre_especialidad }))}
+                        onValueChange={(values) => field.onChange(values.map(Number))}
+                        defaultValue={field.value?.map(String) || []}
+                        placeholder="Seleccionar especialidades..."
+                        className="bg-transparent"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
