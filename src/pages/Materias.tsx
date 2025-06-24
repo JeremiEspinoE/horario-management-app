@@ -17,6 +17,8 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { MultiSelect } from "@/components/ui/multi-select";
+import { Badge } from "@/components/ui/badge";
 
 interface ApiResponse<T> {
   count: number;
@@ -44,6 +46,11 @@ interface Ciclo {
   carrera: number;
 }
 
+interface Especialidad {
+  especialidad_id: number;
+  nombre_especialidad: string;
+}
+
 interface Materia {
   materia_id: number;
   codigo_materia: string;
@@ -65,6 +72,7 @@ interface Materia {
     unidad_nombre?: string;
   };
   ciclo_id?: number;
+  especialidades_detalle: Especialidad[];
 }
 
 const Materias = () => {
@@ -73,6 +81,7 @@ const Materias = () => {
   const [materias, setMaterias] = useState<Materia[]>([]);
   const [tiposEspacios, setTiposEspacios] = useState<TipoEspacio[]>([]);
   const [ciclos, setCiclos] = useState<Ciclo[]>([]);
+  const [especialidades, setEspecialidades] = useState<Especialidad[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -117,10 +126,11 @@ const Materias = () => {
     
     const loadAuxData = async () => {
       try {
-        const [tiposEspacioResponse, carreraResponse, allCarrerasResponse] = await Promise.all([
+        const [tiposEspacioResponse, carreraResponse, allCarrerasResponse, especialidadesResponse] = await Promise.all([
           fetchData<{ results: TipoEspacio[] }>("academic-setup/tipos-espacio/"),
           carreraId ? fetchData<Carrera>(`academic-setup/carreras/${carreraId}/`) : Promise.resolve(null),
-          fetchData<{ results: Carrera[] }>("academic-setup/carreras/")
+          fetchData<{ results: Carrera[] }>("academic-setup/carreras/"),
+          fetchData<Especialidad[] | { results: Especialidad[] }>("academic-setup/especialidades/")
         ]);
 
         if (carreraResponse) {
@@ -142,6 +152,13 @@ const Materias = () => {
           setAllCarreras(allCarrerasResponse.results);
         } else {
           setAllCarreras([]);
+        }
+
+        if (especialidadesResponse) {
+          const especialidadesData = 'results' in especialidadesResponse ? especialidadesResponse.results : especialidadesResponse;
+          setEspecialidades(especialidadesData);
+        } else {
+          setEspecialidades([]);
         }
       } catch (error) {
         console.error("Error loading aux data:", error);
@@ -169,6 +186,7 @@ const Materias = () => {
     estado: z.boolean().default(true),
     carreras: z.array(z.number()).min(1, "Debe seleccionar al menos una carrera"),
     ciclo_id: z.coerce.number().optional(),
+    especialidades_ids: z.array(z.number()).optional(),
   }).refine(data => {
     if (data.carreras.length > 1) {
         return true;
@@ -192,6 +210,7 @@ const Materias = () => {
       estado: true,
       carreras: carreraId ? [parseInt(carreraId)] : [],
       ciclo_id: undefined,
+      especialidades_ids: [],
     },
   });
 
@@ -232,7 +251,10 @@ const Materias = () => {
       form.reset({
         ...materia,
         requiere_tipo_espacio_especifico: materia.requiere_tipo_espacio_especifico || null,
-        carreras: [],
+        carreras: [parseInt(carreraId!)],
+        ciclo_id: materia.ciclo_id,
+        especialidades_ids: materia.especialidades_detalle?.map(e => e.especialidad_id) || [],
+        estado: materia.estado,
       });
     } else {
       setCurrentMateria(null);
@@ -247,6 +269,7 @@ const Materias = () => {
         estado: true,
         carreras: carreraId ? [parseInt(carreraId)] : [],
         ciclo_id: undefined,
+        especialidades_ids: [],
       });
     }
     setIsModalOpen(true);
@@ -263,16 +286,19 @@ const Materias = () => {
 
     setIsSaving(true);
     const values = form.getValues();
-    
+
     try {
       if (currentMateria) {
-        // Update existing materia
+        // Al actualizar, no se deben enviar los campos de relación
+        // que el backend no espera en el método PUT.
+        const { carreras, ciclo_id, ...updateData } = values;
+
         await updateItem<Materia>(
-          "academic-setup/materias/", 
-          currentMateria.materia_id, 
-          values
+          "academic-setup/materias/",
+          currentMateria.materia_id,
+          updateData
         );
-        toast.success("Materia actualizada exitosamente");
+        toast.success("Materia actualizada exitosamente.");
         loadMaterias(pagination.page);
       } else {
         // Create new materia
@@ -281,7 +307,7 @@ const Materias = () => {
           values
         );
         toast.success("Materia creada y asignada a la carrera exitosamente");
-        loadMaterias(1);
+        loadMaterias(pagination.page);
       }
       handleCloseModal();
     } catch (error) {
@@ -327,12 +353,31 @@ const Materias = () => {
       )
     },
     { 
+      key: "horas_totales", 
+      header: "Horas Totales", 
+      render: (row: Materia) => `${row.horas_totales}`
+    },
+    { 
       key: "requiere_tipo_espacio_especifico", 
-      header: "Tipo Espacio", 
+      header: "Espacio Requerido",
+      render: (row: Materia) => row.requiere_tipo_espacio_nombre || <span className="text-gray-400">N/A</span>
+    },
+    {
+      key: "especialidades_detalle",
+      header: "Especialidades Requeridas",
       render: (row: Materia) => {
-        if (!row.requiere_tipo_espacio_especifico) return "No específico";
-        const tipoEspacio = tiposEspacios.find(t => t.tipo_espacio_id === row.requiere_tipo_espacio_especifico);
-        return tipoEspacio ? tipoEspacio.nombre_tipo_espacio : "Desconocido";
+        if (!row.especialidades_detalle || row.especialidades_detalle.length === 0) {
+          return <span className="text-gray-500">Ninguna</span>;
+        }
+        return (
+          <div className="flex flex-wrap gap-1">
+            {row.especialidades_detalle.map(e => (
+              <Badge key={e.especialidad_id} variant="secondary">
+                {e.nombre_especialidad}
+              </Badge>
+            ))}
+          </div>
+        );
       }
     },
     { 
@@ -407,39 +452,45 @@ const Materias = () => {
       <FormModal
         isOpen={isModalOpen}
         onClose={handleCloseModal}
-        title={currentMateria ? "Editar Materia" : "Nueva Materia"}
+        title={currentMateria ? "Editar Materia" : "Crear Nueva Materia"}
+        description="Complete los detalles de la materia. Los campos marcados con * son obligatorios."
         onSubmit={handleSave}
         isSubmitting={isSaving}
         isValid={form.formState.isValid}
         form={
           <Form {...form}>
             <div className="space-y-4">
-              <FormField
-                control={form.control}
-                name="codigo_materia"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Código</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Código de la materia" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="nombre_materia"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nombre</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Nombre de la materia" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* Fila 1: Código y Nombre */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="codigo_materia"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Código</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Código de la materia" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="nombre_materia"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nombre</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Nombre de la materia" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Fila 2: Descripción */}
               <FormField
                 control={form.control}
                 name="descripcion"
@@ -447,13 +498,15 @@ const Materias = () => {
                   <FormItem>
                     <FormLabel>Descripción</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Descripción de la materia" {...field} />
+                      <Textarea placeholder="Descripción de la materia" {...field} value={field.value ?? ""} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <div className="grid grid-cols-3 gap-4">
+
+              {/* Fila 3: Horas académicas */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField
                   control={form.control}
                   name="horas_academicas_teoricas"
@@ -461,13 +514,7 @@ const Materias = () => {
                     <FormItem>
                       <FormLabel>Horas Teóricas</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="number" 
-                          min="0"
-                          placeholder="0" 
-                          {...field} 
-                          onChange={e => field.onChange(parseInt(e.target.value) || 0)}
-                        />
+                        <Input type="number" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -480,13 +527,7 @@ const Materias = () => {
                     <FormItem>
                       <FormLabel>Horas Prácticas</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="number" 
-                          min="0"
-                          placeholder="0" 
-                          {...field} 
-                          onChange={e => field.onChange(parseInt(e.target.value) || 0)}
-                        />
+                        <Input type="number" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -499,130 +540,25 @@ const Materias = () => {
                     <FormItem>
                       <FormLabel>Horas Laboratorio</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="number" 
-                          min="0"
-                          placeholder="0" 
-                          {...field} 
-                          onChange={e => field.onChange(parseInt(e.target.value) || 0)}
-                        />
+                        <Input type="number" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
-              <FormField
-                control={form.control}
-                name="carreras"
-                render={() => (
-                  <FormItem>
-                    <FormLabel>Carreras</FormLabel>
-                    <FormDescription>
-                      Seleccione una o más carreras para asociar la materia.
-                    </FormDescription>
-                    <div className="space-y-2 max-h-40 overflow-y-auto border rounded-md p-3">
-                      {allCarreras.map((carrera) => (
-                        <FormField
-                          key={carrera.carrera_id}
-                          control={form.control}
-                          name="carreras"
-                          render={({ field }) => {
-                            return (
-                              <FormItem
-                                key={carrera.carrera_id}
-                                className="flex flex-row items-start space-x-3 space-y-0"
-                              >
-                                <FormControl>
-                                  <Checkbox
-                                    checked={field.value?.includes(carrera.carrera_id)}
-                                    onCheckedChange={(checked) => {
-                                      return checked
-                                        ? field.onChange([...(field.value || []), carrera.carrera_id])
-                                        : field.onChange(
-                                            (field.value || []).filter(
-                                              (value) => value !== carrera.carrera_id
-                                            )
-                                          )
-                                    }}
-                                    disabled={!!currentMateria}
-                                  />
-                                </FormControl>
-                                <FormLabel className="font-normal">
-                                  {carrera.nombre_carrera}
-                                </FormLabel>
-                              </FormItem>
-                            )
-                          }}
-                        />
-                      ))}
-                    </div>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              {form.watch("carreras")?.length === 1 && (
-                <FormField
-                  control={form.control}
-                  name="ciclo_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Ciclo Académico</FormLabel>
-                      <Select
-                        onValueChange={(value) => field.onChange(Number(value))}
-                        value={field.value?.toString()}
-                        disabled={!!currentMateria}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Seleccione un ciclo para la materia" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {ciclos.map((ciclo) => (
-                            <SelectItem
-                              key={ciclo.ciclo_id}
-                              value={ciclo.ciclo_id.toString()}
-                            >
-                              {ciclo.nombre_ciclo}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-              <FormField
-                control={form.control}
-                name="requiere_tipo_espacio_especifico"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                    <div className="space-y-0.5">
-                      <FormLabel className="text-base">
-                        Requiere tipo de espacio específico
-                      </FormLabel>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value !== null}
-                        onCheckedChange={(value) => field.onChange(value ? 1 : null)}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              {form.watch("requiere_tipo_espacio_especifico") !== null && (
+
+              {/* Fila 4: Tipo de Espacio y Estado */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
                 <FormField
                   control={form.control}
                   name="requiere_tipo_espacio_especifico"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Tipo de Espacio</FormLabel>
+                      <FormLabel>Tipo de Espacio Requerido</FormLabel>
                       <Select
-                        onValueChange={(value) => field.onChange(value ? parseInt(value) : null)}
-                        value={field.value?.toString()}
+                        onValueChange={(value) => field.onChange(value === "null" ? null : parseInt(value))}
+                        value={field.value?.toString() ?? "null"}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -630,6 +566,7 @@ const Materias = () => {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
+                          <SelectItem value="null">Ninguno</SelectItem>
                           {tiposEspacios.map((tipo) => (
                             <SelectItem key={tipo.tipo_espacio_id} value={tipo.tipo_espacio_id.toString()}>
                               {tipo.nombre_tipo_espacio}
@@ -641,23 +578,104 @@ const Materias = () => {
                     </FormItem>
                   )}
                 />
-              )}
+                <FormField
+                  control={form.control}
+                  name="estado"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm mt-4">
+                      <div className="space-y-0.5">
+                        <FormLabel>Estado</FormLabel>
+                        <FormDescription>
+                          {field.value ? "Materia activa" : "Materia inactiva"}
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+              
+              {/* Fila 5: Carreras y Ciclo */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="carreras"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Carrera(s)</FormLabel>
+                      <FormControl>
+                        <MultiSelect
+                          options={allCarreras.map(c => ({ value: String(c.carrera_id), label: c.nombre_carrera }))}
+                          onValueChange={(values) => {
+                            const numberValues = values.map(Number);
+                            field.onChange(numberValues);
+                            if(numberValues.length !== 1) {
+                              form.setValue("ciclo_id", undefined); // Reset ciclo if not a single carrera
+                            }
+                          }}
+                          defaultValue={field.value.map(String)}
+                          placeholder="Seleccionar carreras..."
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                {selectedCarrerasInForm && selectedCarrerasInForm.length === 1 && ciclos.length > 0 && (
+                  <FormField
+                    control={form.control}
+                    name="ciclo_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Ciclo</FormLabel>
+                        <Select
+                          onValueChange={(value) => field.onChange(parseInt(value))}
+                          value={field.value?.toString() || undefined}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccionar ciclo" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {ciclos.map(ciclo => (
+                              <SelectItem key={ciclo.ciclo_id} value={ciclo.ciclo_id.toString()}>
+                                {ciclo.nombre_ciclo}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+              </div>
+              
+              {/* Fila 6: Especialidades */}
               <FormField
                 control={form.control}
-                name="estado"
+                name="especialidades_ids"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                    <div className="space-y-0.5">
-                      <FormLabel className="text-base">
-                        Estado
-                      </FormLabel>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
+                  <FormItem>
+                    <FormLabel>Especialidades Requeridas</FormLabel>
+                     <FormControl>
+                       <MultiSelect
+                         options={especialidades.map(e => ({ value: String(e.especialidad_id), label: e.nombre_especialidad }))}
+                         onValueChange={(values) => field.onChange(values.map(Number))}
+                         defaultValue={field.value?.map(String) || []}
+                         placeholder="Seleccionar especialidades..."
+                       />
+                     </FormControl>
+                    <FormDescription>
+                      ¿Qué especialidades se necesitan para dictar esta materia?
+                    </FormDescription>
+                    <FormMessage />
                   </FormItem>
                 )}
               />

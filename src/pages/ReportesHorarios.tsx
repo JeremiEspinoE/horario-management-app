@@ -64,6 +64,7 @@ interface BloqueHorario {
   hora_inicio: string;
   hora_fin: string;
   orden: number;
+  dia_semana?: number;
 }
 
 interface Materia {
@@ -81,6 +82,10 @@ interface HorarioAsignado {
   dia_semana: number;
   bloque_horario: number;
   materia: number;
+  grupo_detalle: Grupo;
+  materia_detalle: Materia;
+  docente_detalle: Docente;
+  espacio_detalle: Aula;
 }
 
 interface HorarioCelda {
@@ -111,28 +116,6 @@ const stringToColor = (str: string) => {
   
   const hue = hash % 360;
   return `hsla(${hue}, 80%, 85%, 0.85)`;
-};
-
-// Helper function to fetch all paginated data
-const fetchAllPaginatedData = async <T,>(url: string): Promise<T[]> => {
-  const items: T[] = [];
-  let nextUrl: string | null = url;
-  while (nextUrl) {
-    try {
-      const response = await client.get(nextUrl);
-      items.push(...response.data.results);
-      nextUrl = response.data.next;
-      if (nextUrl) {
-        // Convert absolute URL to relative path for the next request
-        const urlObject = new URL(nextUrl);
-        nextUrl = urlObject.pathname.replace('/api/', '') + urlObject.search;
-      }
-    } catch (error) {
-      console.error(`Error fetching paginated data from ${nextUrl}:`, error);
-      break;
-    }
-  }
-  return items;
 };
 
 const ReportesHorarios = () => {
@@ -173,10 +156,13 @@ const ReportesHorarios = () => {
           setPeriodos(periodosData);
           setSelectedPeriodo(periodosData[0].periodo_id);
         }
-        // Load time blocks (respuesta paginada) - Aumentar page_size para traer todos
-        const bloquesResponse = await fetchData<{ results: BloqueHorario[] }>("scheduling/bloques-horarios/?page_size=100");
-        const bloquesData = bloquesResponse?.results ?? [];
-        setBloques(bloquesData.sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)));
+        // Load time blocks (respuesta NO paginada)
+        const bloquesData = await fetchData<BloqueHorario[]>("scheduling/bloques-horarios/");
+        if (bloquesData && Array.isArray(bloquesData)) {
+          setBloques(bloquesData.sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)));
+        } else {
+          setBloques([]);
+        }
         // Load academic units (respuesta paginada)
         const unidadesResponse = await fetchData<{ results: UnidadAcademica[] }>("academic-setup/unidades-academicas/");
         const unidadesData = unidadesResponse?.results ?? [];
@@ -196,34 +182,33 @@ const ReportesHorarios = () => {
     loadInitialData();
   }, []);
   
-  // Load carreras, aulas y docentes when unidad changes
+  // Load carreras when unidad changes
   useEffect(() => {
     if (selectedUnidad) {
-      const loadUnitData = async () => {
+      const loadCarreras = async () => {
         try {
-          // Load carreras (paginated, usually not many)
+          // Load carreras (respuesta paginada)
           const carrerasResponse = await fetchData<{ results: Carrera[] }>(`academic-setup/carreras/?unidad=${selectedUnidad}`);
-          setCarreras(carrerasResponse?.results ?? []);
-
-          // Load ALL aulas for this unit
-          const allAulas = await fetchAllPaginatedData<Aula>(`academic-setup/espacios-fisicos/?unidad=${selectedUnidad}`);
-          setAulas(allAulas);
-
-          // Load ALL docentes for this unit with corrected parameter
-          const allDocentes = await fetchAllPaginatedData<Docente>(`users/docentes/?unidad_id=${selectedUnidad}`);
-          setDocentes(allDocentes);
-
-          // Reset dependent filters
+          const carrerasData = carrerasResponse?.results ?? [];
+          setCarreras(Array.isArray(carrerasData) ? carrerasData : []);
+          // Load aulas for this unidad (respuesta paginada)
+          const aulasResponse = await fetchData<{ results: Aula[] }>(`academic-setup/espacios-fisicos/?unidad=${selectedUnidad}`);
+          const aulasData = aulasResponse?.results ?? [];
+          setAulas(Array.isArray(aulasData) ? aulasData : []);
+          // Load docentes for this unidad (respuesta paginada)
+          const docentesResponse = await fetchData<{ results: Docente[] }>(`users/docentes/?unidad_principal=${selectedUnidad}`);
+          const docentesData = docentesResponse?.results ?? [];
+          setDocentes(Array.isArray(docentesData) ? docentesData : []);
           setSelectedCarrera(null);
           setSelectedGrupo(null);
           setSelectedAula(null);
           setSelectedDocente(null);
         } catch (error) {
-          console.error("Error loading data for the selected unit:", error);
-          toast.error("Error al cargar los datos de la unidad");
+          console.error("Error loading carreras:", error);
+          toast.error("Error al cargar las carreras");
         }
       };
-      loadUnitData();
+      loadCarreras();
     }
   }, [selectedUnidad]);
   
@@ -252,10 +237,17 @@ const ReportesHorarios = () => {
   
   // Load horarios when filters change
   useEffect(() => {
-    if (selectedPeriodo) {
-      loadHorarios();
+    if (String(role).toLowerCase() === 'docente') {
+      if (selectedPeriodo && selectedDocente && activeTab === 'docente') {
+        loadHorarios();
+      }
+    } else {
+      if (selectedPeriodo) {
+        loadHorarios();
+      }
     }
-  }, [selectedPeriodo, selectedGrupo, selectedDocente, selectedAula]);
+    // eslint-disable-next-line
+  }, [selectedPeriodo, selectedGrupo, selectedDocente, selectedAula, activeTab, role]);
   
   // Selección automática para docentes
   useEffect(() => {
@@ -268,55 +260,43 @@ const ReportesHorarios = () => {
   
   const loadHorarios = async () => {
     setIsLoading(true);
+    setHorarios([]); // Limpiar horarios antes de cargar
+    setHorariosCeldas([]); // Limpiar celdas
+
+    if (!selectedPeriodo) {
+        setIsLoading(false);
+        return;
+    }
+
     let endpoint = `scheduling/horarios-asignados/?periodo=${selectedPeriodo}`;
-    if (selectedGrupo) {
-      endpoint += `&grupo=${selectedGrupo}`;
-    } else if (selectedCarrera) {
-      // Si no hay grupo pero sí carrera, filtramos por todos los grupos de esa carrera
-      const gruposDeCarrera = grupos.filter(g => g.carrera === selectedCarrera).map(g => g.grupo_id);
-      if (gruposDeCarrera.length > 0) {
-        endpoint += `&grupo__in=${gruposDeCarrera.join(',')}`;
-      } else {
-         endpoint += `&carrera=${selectedCarrera}`; // Fallback por si la logica de grupos no funciona
-      }
+    
+    // Construir el endpoint basado en la pestaña activa y el filtro seleccionado
+    const tabFilterMap = {
+      grupo: selectedGrupo,
+      docente: selectedDocente,
+      aula: selectedAula,
+    };
+    
+    if (activeTab in tabFilterMap && tabFilterMap[activeTab as keyof typeof tabFilterMap]) {
+        endpoint += `&${activeTab}=${tabFilterMap[activeTab as keyof typeof tabFilterMap]}`;
     }
-    if (selectedDocente) {
-      endpoint += `&docente=${selectedDocente}`;
-    }
-    if (selectedAula) {
-      endpoint += `&espacio=${selectedAula}`;
-    }
+
     try {
-      // Load horarios (respuesta paginada)
-      const horariosResponse = await fetchData<{ results: HorarioAsignado[] }>(endpoint);
-      const horariosData = horariosResponse?.results ?? [];
-      setHorarios(Array.isArray(horariosData) ? horariosData : []);
-      // Process horarios to display format
-      if (horariosData) {
-        const celdas: HorarioCelda[] = [];
-        for (const horario of horariosData) {
-          const grupo = grupos.find(g => g.grupo_id === horario.grupo);
-          const materia = materias.find(m => m.materia_id === horario.materia);
-          const docente = docentes.find(d => d.docente_id === horario.docente);
-          const aula = aulas.find(a => a.espacio_id === horario.espacio);
-          if (materia) {
-            const color = stringToColor(materia.nombre_materia);
-            celdas.push({
-              bloqueId: horario.bloque_horario,
-              diaId: horario.dia_semana,
-              materia: materia.nombre_materia,
-              docente: docente ? `${docente.nombres} ${docente.apellidos}` : '',
-              aula: aula ? aula.nombre_espacio : '',
-              grupo: grupo ? grupo.codigo_grupo : '',
-              color
-            });
-          }
-        }
-        setHorariosCeldas(celdas);
+      const response = await client.get<{ count: number; next: string | null; previous: string | null; results: HorarioAsignado[] }>(endpoint);
+      const horariosData = response.data?.results ?? [];
+      
+      if (!Array.isArray(horariosData)) {
+          console.error("La respuesta de la API de horarios no es un array:", horariosData);
+          toast.error("Formato de datos de horarios inesperado.");
+          setHorarios([]);
+      } else {
+          setHorarios(horariosData);
       }
+
     } catch (error) {
       console.error("Error loading horarios:", error);
-      toast.error("Error al cargar los horarios");
+      toast.error("No se pudieron cargar los horarios.");
+      setHorarios([]);
     } finally {
       setIsLoading(false);
     }
@@ -401,6 +381,53 @@ const ReportesHorarios = () => {
     return horariosCeldas.find(h => h.diaId === diaId && h.bloqueId === bloqueId) || null;
   };
   
+  // Procesar los datos para la tabla/grid cuando cambian los horarios
+  useEffect(() => {
+    if (horarios.length > 0) {
+      console.log('Horarios recibidos:', horarios);
+      const celdas: HorarioCelda[] = [];
+      for (const horario of horarios) {
+        const materia = horario.materia_detalle;
+        const docente = horario.docente_detalle;
+        const aula = horario.espacio_detalle;
+        const grupo = horario.grupo_detalle;
+
+        // Log para depurar cada horario
+        console.log('Procesando horario:', {
+          materia,
+          docente,
+          aula,
+          grupo,
+          horario
+        });
+
+        if (materia) {
+          const color = stringToColor(materia.nombre_materia);
+          celdas.push({
+            bloqueId: horario.bloque_horario,
+            diaId: horario.dia_semana,
+            materia: materia.nombre_materia,
+            docente: docente ? `${docente.nombres} ${docente.apellidos}` : 'N/A',
+            aula: aula ? aula.nombre_espacio : 'N/A',
+            grupo: grupo ? grupo.codigo_grupo : 'N/A',
+            color
+          });
+        }
+      }
+      console.log('Celdas generadas:', celdas);
+      setHorariosCeldas(celdas);
+    } else {
+      setHorariosCeldas([]);
+    }
+  }, [horarios]);
+
+  // Agrupar bloques horarios por franja horaria única (ignorando el día)
+  const bloquesUnicos = Array.from(
+    new Map(
+      bloques.map(b => [`${b.hora_inicio}-${b.hora_fin}`, b])
+    ).values()
+  );
+
   return (
     <div className="container mx-auto py-6">
       <PageHeader 
@@ -564,13 +591,19 @@ const ReportesHorarios = () => {
                   disabled={String(role).toLowerCase() === 'docente' || !selectedUnidad}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar docente" />
+                    <SelectValue>
+                      {String(role).toLowerCase() === 'docente' && user && user.docente_id
+                        ? `${user.first_name ?? user.nombres ?? ''} ${user.last_name ?? user.apellidos ?? ''}`.trim()
+                        : selectedDocente
+                          ? ((docentes.find(d => d.docente_id === selectedDocente)?.first_name ?? docentes.find(d => d.docente_id === selectedDocente)?.nombres ?? '') + ' ' + (docentes.find(d => d.docente_id === selectedDocente)?.last_name ?? docentes.find(d => d.docente_id === selectedDocente)?.apellidos ?? ''))
+                          : "Todos los docentes"}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos los docentes</SelectItem>
                     {docentes.filter(d => d && d.docente_id != null).map((docente) => (
                       <SelectItem key={docente.docente_id} value={docente.docente_id.toString()}>
-                        {docente.nombres} {docente.apellidos}
+                        {(docente.first_name ?? docente.nombres ?? '') + ' ' + (docente.last_name ?? docente.apellidos ?? '')}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -608,82 +641,54 @@ const ReportesHorarios = () => {
         </CardContent>
       </Card>
       
-      <Card className="overflow-hidden">
-        <CardContent className="p-0">
-          <div className="p-4 bg-academic-primary/10 flex items-center space-x-2">
-            <Calendar className="h-5 w-5 text-academic-primary" />
-            <h3 className="font-medium text-academic-primary">
-              {(() => {
-                if (activeTab === 'grupo' && selectedGrupo) {
-                  const grupo = grupos.find(g => g.grupo_id === selectedGrupo);
-                  // Since a group can have multiple materias, we show a generic title or the code
-                  return `Horario del Grupo: ${grupo?.codigo_grupo || ''}`;
-                } else if (activeTab === 'docente' && selectedDocente) {
-                  const docente = docentes.find(d => d.docente_id === selectedDocente);
-                  return `Horario: ${docente?.nombres || ''} ${docente?.apellidos || ''}`;
-                } else if (activeTab === 'aula' && selectedAula) {
-                  const aula = aulas.find(a => a.espacio_id === selectedAula);
-                  return `Horario: Aula ${aula?.nombre_espacio || ''}`;
-                } else {
-                  return `Horario ${periodos.find(p => p.periodo_id === selectedPeriodo)?.nombre_periodo || ''}`;
+      {isLoading ? (
+        <div className="flex justify-center items-center py-10">
+          <Loader2 className="h-8 w-8 animate-spin text-academic-primary" />
+        </div>
+      ) : (
+        horarios.length > 0 ? (
+          <div ref={printRef} className="bg-white p-4 rounded-md shadow">
+            <h3 className="text-xl font-bold mb-4 text-center">
+                Horario del {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}: {
+                    activeTab === 'grupo' ? grupos.find(g => g.grupo_id === selectedGrupo)?.codigo_grupo :
+                    activeTab === 'docente' ? docentes.find(d => d.docente_id === selectedDocente)?.nombres :
+                    aulas.find(a => a.espacio_id === selectedAula)?.nombre_espacio
                 }
-              })()}
             </h3>
-          </div>
-          
-          <div className="p-6" ref={printRef}>
-            <div className="border rounded-lg overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                      Horario
-                    </th>
-                    {diasSemana.map((dia) => (
-                      <th 
-                        key={dia.id} 
-                        scope="col" 
-                        className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[140px]"
-                      >
-                        {dia.nombre}
+            <div className="overflow-x-auto">
+              <table className="min-w-full border-collapse border border-gray-200">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="border border-gray-300 px-2 py-2 text-xs font-semibold text-gray-600">HORARIO</th>
+                    {diasSemana.map(dia => (
+                      <th key={dia.id} className="border border-gray-300 px-2 py-2 text-xs font-semibold text-gray-600">
+                        {dia.nombre.toUpperCase()}
                       </th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {bloques.filter(b => b && b.bloque_def_id != null).map((bloque) => (
-                    <tr key={bloque.bloque_def_id} className="group/row hover:bg-gray-50">
-                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 border-r group-hover/row:bg-gray-100">
+                <tbody>
+                  {bloquesUnicos.map((bloque) => (
+                    <tr key={`${bloque.hora_inicio}-${bloque.hora_fin}`}>
+                      <td className="p-4 font-medium border-r">
                         {bloque.hora_inicio} - {bloque.hora_fin}
                       </td>
                       {diasSemana.map((dia) => {
-                        const horarioCelda = getHorarioPorDiaBloque(dia.id, bloque.bloque_def_id);
-                        
+                        // Buscar el bloque real para este día y franja
+                        const bloqueDia = bloques.find(
+                          b => b.hora_inicio === bloque.hora_inicio && b.hora_fin === bloque.hora_fin && b.dia_semana === dia.id
+                        );
+                        // Buscar la celda de horario asignado para este día y franja
+                        const celda = horariosCeldas.find(
+                          h => h.diaId === dia.id && h.bloqueId === (bloqueDia ? bloqueDia.bloque_def_id : -1)
+                        );
                         return (
-                          <td 
-                            key={`${bloque.bloque_def_id}-${dia.id}`} 
-                            className="px-2 py-2 text-sm border-r"
-                          >
-                            {horarioCelda ? (
-                              <div 
-                                className="p-2 rounded shadow-sm border"
-                                style={{ backgroundColor: horarioCelda.color }}
-                              >
-                                <div className="font-medium text-gray-900 mb-1 truncate">
-                                  {horarioCelda.materia}
-                                </div>
-                                <div className="flex items-center text-xs text-gray-600 mb-0.5">
-                                  <UserSquare className="h-3 w-3 mr-1 flex-shrink-0" />
-                                  <span className="truncate">{horarioCelda.docente}</span>
-                                </div>
-                                <div className="flex items-center text-xs text-gray-600 mb-0.5">
-                                  <BookOpen className="h-3 w-3 mr-1 flex-shrink-0" />
-                                  <span className="truncate">{horarioCelda.grupo}</span>
-                                </div>
-                                <div className="flex items-center text-xs text-gray-600">
-                                  <Building className="h-3 w-3 mr-1 flex-shrink-0" />
-                                  <span className="truncate">{horarioCelda.aula}</span>
-                                </div>
+                          <td key={dia.id} className="p-4 text-center border-r">
+                            {celda ? (
+                              <div style={{ background: celda.color, borderRadius: 4, padding: 4 }}>
+                                <div className="font-semibold text-xs">{celda.materia}</div>
+                                <div className="text-xs">{celda.docente}</div>
+                                <div className="text-xs">Aula: {celda.aula}</div>
                               </div>
                             ) : null}
                           </td>
@@ -694,22 +699,10 @@ const ReportesHorarios = () => {
                 </tbody>
               </table>
             </div>
-            
-            {horariosCeldas.length === 0 && !isLoading && (
-              <div className="text-center py-10 text-gray-500">
-                <Calendar className="h-10 w-10 mx-auto mb-4 opacity-20" />
-                <p>No hay horarios asignados para los filtros seleccionados</p>
-                <p className="text-sm">Intente seleccionar otros filtros o asigne horarios primero</p>
-              </div>
-            )}
           </div>
-        </CardContent>
-      </Card>
-      
-      {isLoading && (
-        <div className="fixed inset-0 bg-gray-900/20 flex items-center justify-center z-50">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-academic-primary"></div>
-        </div>
+        ) : (
+          !isLoading && <div className="text-center py-10 text-gray-500">No hay horarios asignados para los filtros seleccionados.</div>
+        )
       )}
     </div>
   );
